@@ -9,11 +9,11 @@ project(pico_midi)
 # initialize the Raspberry Pi Pico SDK
 pico_sdk_init()
 
-file(GLOB SRC_FILES "src/*.c") # Load all files in src folder
+file(GLOB SRC_FILES "src/*.cpp") # Load all files in src folder
 
 # rest of your project
 add_executable(pico_midi ${SRC_FILES})
-target_link_libraries(pico_midi pico_stdlib tinyusb_device tinyusb_board)
+target_link_libraries(pico_midi pico_stdlib pico_time pico_sync pico_util tinyusb_device tinyusb_board)
 target_include_directories(pico_midi PRIVATE "./include")
 target_include_directories(pico_midi PRIVATE "${PICO_SDK_PATH}/lib/tinyusb/src/class")
 

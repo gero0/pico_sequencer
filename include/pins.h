@@ -1,9 +1,6 @@
 #ifndef __PINS__
 #define __PINS__
 
-#include "pico/stdlib.h"
-#include "bsp/board.h"
-
 //Define button matrix column and row pins
 #define COL0 4
 #define COL1 5
@@ -37,18 +34,17 @@
 //Shift register for driving HD44780
 #define DISPLAY_DATA 20
 #define DISPLAY_CLOCK 21
-#define DISPLAY_LATCH 22
+#define DISPLAY_E 22
+
+//Hold button
+#define HOLD_BTN 26
+
 
 //Reserved
 //0,1,2,3
 //EEPROM for settings?
 //UART for MIDI
 
-//Velocity potentiometer (ADC0)
-#define VEL_POT 26
-
-//Free
-//27, 28
 
 void configure_pins();
 

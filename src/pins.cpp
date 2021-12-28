@@ -1,4 +1,6 @@
 #include "pins.h"
+#include "pico/stdlib.h"
+#include "bsp/board.h"
 
 void configure_pins(){
     //Matrix
@@ -62,6 +64,10 @@ void configure_pins(){
     gpio_set_dir(START_STOP_BTN, GPIO_IN);
     gpio_pull_down(START_STOP_BTN);
 
+    gpio_init(HOLD_BTN);
+    gpio_set_dir(HOLD_BTN, GPIO_IN);
+    gpio_pull_down(HOLD_BTN);
+
     //Encoder pins
     // ??
 
@@ -69,8 +75,8 @@ void configure_pins(){
     gpio_init(DISPLAY_DATA);
     gpio_set_dir(DISPLAY_DATA, GPIO_OUT);
 
-    gpio_init(DISPLAY_LATCH);
-    gpio_set_dir(DISPLAY_LATCH, GPIO_OUT);
+    gpio_init(DISPLAY_E);
+    gpio_set_dir(DISPLAY_E, GPIO_OUT);
     
     gpio_init(DISPLAY_CLOCK);
     gpio_set_dir(DISPLAY_CLOCK, GPIO_OUT);
