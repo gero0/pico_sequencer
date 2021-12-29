@@ -5,33 +5,42 @@
 void configure_pins(){
     //Matrix
 
-    gpio_init(COL0);
-    gpio_set_dir(COL0, GPIO_OUT);
+    // gpio_init(COL0);
+    // gpio_set_dir(COL0, GPIO_OUT);
 
-    gpio_init(COL1);
-    gpio_set_dir(COL1, GPIO_OUT);
+    // gpio_init(COL1);
+    // gpio_set_dir(COL1, GPIO_OUT);
 
-    gpio_init(COL2);
-    gpio_set_dir(COL2, GPIO_OUT);
+    // gpio_init(COL2);
+    // gpio_set_dir(COL2, GPIO_OUT);
 
-    gpio_init(COL3);
-    gpio_set_dir(COL3, GPIO_OUT);
+    // gpio_init(COL3);
+    // gpio_set_dir(COL3, GPIO_OUT);
+
+    gpio_init(COL_DATA);
+    gpio_set_dir(COL_DATA, GPIO_OUT);
+
+    gpio_init(COL_CLOCK);
+    gpio_set_dir(COL_CLOCK, GPIO_OUT);
+
+    gpio_init(COL_DATA);
+    gpio_set_dir(COL_DATA, GPIO_OUT);
 
     gpio_init(ROW0);
     gpio_set_dir(ROW0, GPIO_IN);
     gpio_pull_down(ROW0);
 
-    gpio_init(ROW1);
-    gpio_set_dir(ROW1, GPIO_IN);
-    gpio_pull_down(ROW1);
+    // gpio_init(ROW1);
+    // gpio_set_dir(ROW1, GPIO_IN);
+    // gpio_pull_down(ROW1);
 
-    gpio_init(ROW2);
-    gpio_set_dir(ROW2, GPIO_IN);
-    gpio_pull_down(ROW2);
+    // gpio_init(ROW2);
+    // gpio_set_dir(ROW2, GPIO_IN);
+    // gpio_pull_down(ROW2);
 
-    gpio_init(ROW3);
-    gpio_set_dir(ROW3, GPIO_IN);
-    gpio_pull_down(ROW3);
+    // gpio_init(ROW3);
+    // gpio_set_dir(ROW3, GPIO_IN);
+    // gpio_pull_down(ROW3);
 
     //LED SR
     gpio_init(SHIFT_DATA);
@@ -69,7 +78,13 @@ void configure_pins(){
     gpio_pull_down(HOLD_BTN);
 
     //Encoder pins
-    // ??
+    gpio_init(ENC_1);
+    gpio_set_dir(ENC_1, GPIO_IN);
+    gpio_pull_up(ENC_1);
+
+    gpio_init(ENC_2);
+    gpio_set_dir(ENC_2, GPIO_IN);
+    gpio_pull_up(ENC_2);
 
     //Display SR
     gpio_init(DISPLAY_DATA);
