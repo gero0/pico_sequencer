@@ -1,5 +1,5 @@
 #include "pins.h"
-#include "bsp/board.h"
+#include "pico/stdlib.h"
 
 void LCD_write_nibble(uint8_t nibble, bool rs) {
     for (int i = 3; i >= 0; i--) {
@@ -9,7 +9,7 @@ void LCD_write_nibble(uint8_t nibble, bool rs) {
         gpio_put(DISPLAY_CLOCK, 0);
     }
 
-    gpio_put(DISPLAY_DATA, rs)
+    gpio_put(DISPLAY_DATA, rs);
         gpio_put(DISPLAY_CLOCK, 1);
     gpio_put(DISPLAY_CLOCK, 0);
     //One more pulse(tied clock and latch)
@@ -37,7 +37,7 @@ void LCD_write_command(uint8_t command) {
 
 void LCD_write_text(char* text, uint32_t len) {
     for (int i = 0; i < len; i++) {
-        LCD_write_byte(text[i])
+        LCD_write_byte(text[i]);
     }
 }
 

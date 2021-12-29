@@ -52,8 +52,6 @@ static absolute_time_t last_set_int_time;
 
 static uint8_t selected_note = 39;
 
-static bool last_button_states[] = { false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false };
-
 //Expansion ideas: 
 //MIDI Port
 //Saving patterns to eeprom
@@ -64,6 +62,7 @@ int main() {
     configure_pins();
     setup_default_uart();
     set_interrupts();
+    LCD_init();
 
     //Start/stop button irq
     last_startstop_int_time = get_absolute_time();
