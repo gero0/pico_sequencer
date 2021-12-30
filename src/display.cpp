@@ -2,15 +2,18 @@
 #include "pico/stdlib.h"
 
 void LCD_write_nibble(uint8_t nibble, bool rs) {
+    gpio_put(DISPLAY_E, 1);
+
     for (int i = 3; i >= 0; i--) {
-        bool state = (bool)(nibble >> i) & 1;
+        bool state = ((nibble >> i) & 1) != 0;
+        //bool state = true;
         gpio_put(DISPLAY_DATA, state);
         gpio_put(DISPLAY_CLOCK, 1);
         gpio_put(DISPLAY_CLOCK, 0);
     }
 
     gpio_put(DISPLAY_DATA, rs);
-        gpio_put(DISPLAY_CLOCK, 1);
+    gpio_put(DISPLAY_CLOCK, 1);
     gpio_put(DISPLAY_CLOCK, 0);
     //One more pulse(tied clock and latch)
     gpio_put(DISPLAY_CLOCK, 1);
@@ -24,25 +27,32 @@ void LCD_write_nibble(uint8_t nibble, bool rs) {
 void LCD_write_byte(uint8_t byte) {
     uint8_t low_nibble = byte & 0xF;
     uint8_t high_nibble = byte >> 4;
-    LCD_write_nibble(low_nibble, true);
     LCD_write_nibble(high_nibble, true);
+    LCD_write_nibble(low_nibble, true);
 }
 
 void LCD_write_command(uint8_t command) {
     uint8_t low_nibble = command & 0xF;
     uint8_t high_nibble = command >> 4;
-    LCD_write_nibble(low_nibble, false);
     LCD_write_nibble(high_nibble, false);
+    LCD_write_nibble(low_nibble, false);
 }
 
 void LCD_write_text(char* text, uint32_t len) {
     for (int i = 0; i < len; i++) {
         LCD_write_byte(text[i]);
+        sleep_ms(1);
     }
 }
 
-void LCD_clear(){
+void LCD_clear() {
     LCD_write_command(1);
+}
+
+void LCD_position(uint8_t x, uint8_t y) {
+    int temp = 127 + y;
+    if (x == 2) temp = temp + 64;
+    LCD_write_command(temp);
 }
 
 void LCD_init() {

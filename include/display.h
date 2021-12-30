@@ -8,5 +8,6 @@ void LCD_write_command(uint8_t command);
 void LCD_write_byte(uint8_t byte);
 void LCD_write_text(char* text, uint32_t len);
 void LCD_clear();
+void LCD_position(uint8_t x, uint8_t y);
 
 #endif

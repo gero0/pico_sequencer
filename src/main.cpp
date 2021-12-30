@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <algorithm>
 #include "pico/stdlib.h"
 
 #include "bsp/board.h"
@@ -15,6 +16,7 @@ void display();
 void set_interrupts();
 void scan_inputs(bool* button_states);
 void pattern_button_pressed(uint8_t button);
+void update_display();
 
 void stop();
 void start();
@@ -28,6 +30,8 @@ void set_button_handler();
 void encoder_handler();
 
 static repeating_timer_t note_timer;
+static repeating_timer_t display_timer;
+
 static uint8_t midi_channel = 10;
 static const uint8_t cable_num = 0; // MIDI jack associated with USB endpoint
 
@@ -36,6 +40,8 @@ static const uint8_t cable_num = 0; // MIDI jack associated with USB endpoint
 static uint8_t sequence[] = { 36,0,42,0,36,0,42,0,36,0,42,0,36,0,42,0 };
 static uint32_t seq_pos = 0;
 static uint8_t last_note = 0;
+
+static uint32_t global_tempo = 120;
 
 static uint8_t velocity = 127;
 
@@ -49,6 +55,7 @@ static enum PlayingState playing_state = STOPPED;
 static absolute_time_t last_startstop_int_time;
 static absolute_time_t last_test_int_time;
 static absolute_time_t last_set_int_time;
+static absolute_time_t last_screen_update_time;
 
 static uint8_t selected_note = 39;
 
@@ -57,11 +64,14 @@ static uint8_t selected_note = 39;
 //Saving patterns to eeprom
 
 int main() {
+    sleep_ms(1000);
     board_init();
     tusb_init();
     configure_pins();
     setup_default_uart();
     set_interrupts();
+    seq_leds();
+
     LCD_init();
 
     //Start/stop button irq
@@ -69,18 +79,25 @@ int main() {
     last_test_int_time = get_absolute_time();
     last_set_int_time = get_absolute_time();
 
-    add_repeating_timer_ms(bpm_to_delay(120), note_timer_callback, NULL, &note_timer);
+    last_screen_update_time = get_absolute_time();
+
+    add_repeating_timer_ms(bpm_to_delay(global_tempo), note_timer_callback, NULL, &note_timer);
 
     while (true) {
         tud_task(); // tinyusb device task
         recv_midi();
         seq_leds();
 
+        if (absolute_time_diff_us(last_screen_update_time, get_absolute_time()) > 200000) {
+            update_display();
+            last_screen_update_time = get_absolute_time();
+        }
+
         //scan twice to debounce
         bool button_states[] = { false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false };
         scan_inputs(button_states);
 
-        sleep_ms(10);
+        // sleep_ms(10);
 
         bool button_states2[] = { false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false };
         scan_inputs(button_states2);
@@ -219,11 +236,19 @@ void start_stop_button_handler() {
         return;
     }
 
-    if (playing_state == STOPPED) {
-        start();
+    //clear entire sequence
+    if (gpio_get(CLEAR_BTN)) {
+        for (int i = 0; i < 16; i++) {
+            sequence[i] = 0;
+        }
     }
     else {
-        stop();
+        if (playing_state == STOPPED) {
+            start();
+        }
+        else {
+            stop();
+        }
     }
 
     last_startstop_int_time = get_absolute_time();
@@ -286,23 +311,29 @@ void encoder_handler() {
             selected_note++;
         }
     }
+
+    printf("%d\n", selected_note);
 }
 
 void scan_inputs(bool* button_states) {
+    //latch and clock connected
+    gpio_put(COL_DATA, 1);
+    gpio_put(COL_CLOCK, 1);
+    gpio_put(COL_CLOCK, 0);
 
     for (int i = 0; i < 16; i++) {
-        bool state = (i == 0);
-        gpio_put(COL_DATA, state);
+        gpio_put(COL_DATA, 0);
         gpio_put(COL_CLOCK, 1);
         gpio_put(COL_CLOCK, 0);
-        gpio_put(COL_LATCH, 1);
-        gpio_put(COL_LATCH, 0);
+
+        sleep_us(10);
 
         button_states[i] = gpio_get(ROW0);
     }
 }
 
 void pattern_button_pressed(uint8_t button) {
+
     //other modes(eg. sequence selection) can be handled here
     if (gpio_get(CLEAR_BTN)) {
         sequence[button] = 0;
@@ -310,4 +341,19 @@ void pattern_button_pressed(uint8_t button) {
     else {
         sequence[button] = selected_note;
     }
+}
+
+void update_display() {
+    LCD_clear();
+    sleep_ms(1);
+    char buffer[16];
+    int n = snprintf(buffer, sizeof(buffer), "Note:%d BPM:%d", selected_note, global_tempo);
+    LCD_position(1, 1);
+    sleep_ms(1);
+    LCD_write_text(buffer, std::min(16, n));
+    sleep_ms(1);
+    LCD_position(2, 1);
+    sleep_ms(1);
+    LCD_write_text("A.SNARE", 7);
+    sleep_ms(1);
 }

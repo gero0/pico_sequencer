@@ -2,21 +2,13 @@
 #define __PINS__
 
 //Define button matrix column and row pins
-// #define COL0 4
-// #define COL1 5
-// #define COL2 6
-// #define COL3 7
 
-// #define ROW0 8
-// #define ROW1 9
-// #define ROW2 10
-// #define ROW3 11
+//Free 7,8,9,10,11
 
 #define COL_DATA 4
 #define COL_CLOCK 5
-#define COL_LATCH 6
 
-#define ROW0 7
+#define ROW0 6
 
 //Define LED shift registers pins
 
