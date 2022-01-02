@@ -8,6 +8,7 @@
 
 #include "pins.h"
 #include "display.h"
+#include "constant_arr.h"
 
 int recv_midi();
 int bpm_to_delay(int bpm);
@@ -55,6 +56,7 @@ static enum PlayingState playing_state = STOPPED;
 static absolute_time_t last_startstop_int_time;
 static absolute_time_t last_test_int_time;
 static absolute_time_t last_set_int_time;
+static absolute_time_t last_enc_int_time;
 static absolute_time_t last_screen_update_time;
 
 static uint8_t selected_note = 39;
@@ -78,6 +80,7 @@ int main() {
     last_startstop_int_time = get_absolute_time();
     last_test_int_time = get_absolute_time();
     last_set_int_time = get_absolute_time();
+    last_enc_int_time = get_absolute_time();
 
     last_screen_update_time = get_absolute_time();
 
@@ -302,6 +305,10 @@ void set_button_handler() {
 }
 
 void encoder_handler() {
+    if (absolute_time_diff_us(last_enc_int_time, get_absolute_time()) < 20000) {
+        return;
+    }
+
     if (gpio_get(ENC_2)) {
         if (selected_note > 1)
             selected_note--;
@@ -312,7 +319,7 @@ void encoder_handler() {
         }
     }
 
-    printf("%d\n", selected_note);
+    last_enc_int_time = get_absolute_time();
 }
 
 void scan_inputs(bool* button_states) {
@@ -347,13 +354,14 @@ void update_display() {
     LCD_clear();
     sleep_ms(1);
     char buffer[16];
-    int n = snprintf(buffer, sizeof(buffer), "Note:%d BPM:%d", selected_note, global_tempo);
+    int n = snprintf(buffer, sizeof(buffer), ">%3s(%3d) T:%d", notes[selected_note], selected_note, global_tempo);
     LCD_position(1, 1);
     sleep_ms(1);
     LCD_write_text(buffer, std::min(16, n));
     sleep_ms(1);
     LCD_position(2, 1);
     sleep_ms(1);
-    LCD_write_text("A.SNARE", 7);
+    const char* instrument = instrument_mapping[selected_note];
+    LCD_write_text((char*)instrument, strlen(instrument));
     sleep_ms(1);
 }
