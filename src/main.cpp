@@ -29,6 +29,11 @@ void test_button_handler();
 void start_stop_button_handler();
 void set_button_handler();
 void encoder_handler();
+void setting_button_handler();
+
+void change_note(bool);
+void change_velocity(bool);
+void change_tempo(bool);
 
 static repeating_timer_t note_timer;
 static repeating_timer_t display_timer;
@@ -43,8 +48,8 @@ static uint32_t seq_pos = 0;
 static uint8_t last_note = 0;
 
 static uint32_t global_tempo = 120;
-
-static uint8_t velocity = 127;
+static uint8_t global_velocity = 127;
+static uint8_t selected_note = 39;
 
 enum PlayingState {
     STOPPED,
@@ -53,17 +58,25 @@ enum PlayingState {
 
 static enum PlayingState playing_state = STOPPED;
 
+enum Setting {
+    NOTE,
+    GL_VELOCITY,
+    TEMPO,
+};
+
+static enum Setting settings[] = { NOTE, TEMPO, GL_VELOCITY };
+static uint8_t current_setting = 0;
+
 static absolute_time_t last_startstop_int_time;
 static absolute_time_t last_test_int_time;
 static absolute_time_t last_set_int_time;
 static absolute_time_t last_enc_int_time;
 static absolute_time_t last_screen_update_time;
-
-static uint8_t selected_note = 39;
+static absolute_time_t last_setting_int_time;
 
 //Expansion ideas: 
 //MIDI Port
-//Saving patterns to eeprom
+//Saving patterns SD
 
 int main() {
     sleep_ms(1000);
@@ -81,6 +94,7 @@ int main() {
     last_test_int_time = get_absolute_time();
     last_set_int_time = get_absolute_time();
     last_enc_int_time = get_absolute_time();
+    last_setting_int_time = get_absolute_time();
 
     last_screen_update_time = get_absolute_time();
 
@@ -144,6 +158,13 @@ void set_interrupts() {
         true,
         button_irq
     );
+
+    gpio_set_irq_enabled_with_callback(
+        SETTING_BTN,
+        GPIO_IRQ_EDGE_RISE,
+        true,
+        button_irq
+    );
 }
 
 int recv_midi() {
@@ -195,7 +216,7 @@ bool note_timer_callback(struct repeating_timer* t) {
 
         uint8_t note = sequence[seq_pos];
         if (note != 0) {
-            uint8_t note_on[3] = { 0x90 | midi_channel, note, velocity };
+            uint8_t note_on[3] = { 0x90 | midi_channel, note, global_velocity };
             tud_midi_stream_write(cable_num, note_on, 3);
             last_note = note;
         }
@@ -218,6 +239,9 @@ bool note_timer_callback(struct repeating_timer* t) {
 
 void button_irq(uint gpio, uint32_t events) {
     switch (gpio) {
+    case ENC_1:
+        encoder_handler();
+        break;
     case START_STOP_BTN:
         start_stop_button_handler();
         break;
@@ -227,9 +251,8 @@ void button_irq(uint gpio, uint32_t events) {
     case SET_BTN:
         set_button_handler();
         break;
-    case ENC_1:
-        encoder_handler();
-        break;
+    case SETTING_BTN:
+        setting_button_handler();
     }
 }
 
@@ -269,7 +292,7 @@ void start() {
     cancel_repeating_timer(&note_timer);
     seq_pos = 0;
     playing_state = PLAYING;
-    add_repeating_timer_ms(bpm_to_delay(120), note_timer_callback, NULL, &note_timer);
+    add_repeating_timer_ms(bpm_to_delay(global_tempo), note_timer_callback, NULL, &note_timer);
 }
 
 void test_button_handler() {
@@ -278,7 +301,7 @@ void test_button_handler() {
         return;
     }
 
-    uint8_t note_on[3] = { 0x90 | midi_channel, selected_note, velocity };
+    uint8_t note_on[3] = { 0x90 | midi_channel, selected_note, global_velocity };
     tud_midi_stream_write(cable_num, note_on, 3);
 
     uint8_t note_off[3] = { 0x80 | midi_channel, selected_note, 0 };
@@ -297,9 +320,7 @@ void set_button_handler() {
         return;
     }
 
-
     sequence[seq_pos] = selected_note;
-
 
     last_set_int_time = get_absolute_time();
 }
@@ -309,7 +330,23 @@ void encoder_handler() {
         return;
     }
 
-    if (gpio_get(ENC_2)) {
+    switch (settings[current_setting]) {
+    case NOTE:
+        change_note(gpio_get(ENC_2));
+        break;
+    case GL_VELOCITY:
+        change_velocity(gpio_get(ENC_2));
+        break;
+    case TEMPO:
+        change_tempo(gpio_get(ENC_2));
+        break;
+    }
+
+    last_enc_int_time = get_absolute_time();
+}
+
+void change_note(bool increment) {
+    if (increment) {
         if (selected_note > 1)
             selected_note--;
     }
@@ -318,8 +355,42 @@ void encoder_handler() {
             selected_note++;
         }
     }
+}
 
-    last_enc_int_time = get_absolute_time();
+void change_velocity(bool increment) {
+    if (increment) {
+        if (global_velocity > 0)
+            global_velocity--;
+    }
+    else {
+        if (global_velocity < 127) {
+            global_velocity++;
+        }
+    }
+}
+
+void change_tempo(bool increment) {
+    if (increment) {
+        if (global_tempo > 1)
+            global_tempo--;
+    }
+    else {
+        if (global_tempo < 255) {
+            global_tempo++;
+        }
+    }
+}
+
+void setting_button_handler() {
+
+    if (absolute_time_diff_us(last_setting_int_time, get_absolute_time()) < 500000) {
+        return;
+    }
+
+    current_setting++;
+    current_setting %= 3;
+
+    last_setting_int_time = get_absolute_time();
 }
 
 void scan_inputs(bool* button_states) {
@@ -340,7 +411,6 @@ void scan_inputs(bool* button_states) {
 }
 
 void pattern_button_pressed(uint8_t button) {
-
     //other modes(eg. sequence selection) can be handled here
     if (gpio_get(CLEAR_BTN)) {
         sequence[button] = 0;
@@ -351,17 +421,39 @@ void pattern_button_pressed(uint8_t button) {
 }
 
 void update_display() {
+    char first_line_buffer[16];
+    char second_line_buffer[16];
+
+    int n = snprintf(
+        first_line_buffer,
+        sizeof(first_line_buffer),
+        "%c%3s(%3d)%cT:%d",
+        settings[current_setting] == NOTE ? '>' : ' ',
+        notes[selected_note],
+        selected_note,
+        settings[current_setting] == TEMPO ? '>' : ' ',
+        global_tempo
+    );
+
+    const char* instrument = instrument_mapping[selected_note];
+
+    int n2 = snprintf(
+        second_line_buffer,
+        sizeof(second_line_buffer),
+        "%9s%cV:%3d",
+        instrument,
+        settings[current_setting] == GL_VELOCITY ? '>' : ' ',
+        global_velocity
+    );
+
     LCD_clear();
     sleep_ms(1);
-    char buffer[16];
-    int n = snprintf(buffer, sizeof(buffer), ">%3s(%3d) T:%d", notes[selected_note], selected_note, global_tempo);
     LCD_position(1, 1);
     sleep_ms(1);
-    LCD_write_text(buffer, std::min(16, n));
+    LCD_write_text(first_line_buffer, std::min(16, n));
     sleep_ms(1);
     LCD_position(2, 1);
     sleep_ms(1);
-    const char* instrument = instrument_mapping[selected_note];
-    LCD_write_text((char*)instrument, strlen(instrument));
+    LCD_write_text(second_line_buffer, std::min(16, n2));
     sleep_ms(1);
 }
