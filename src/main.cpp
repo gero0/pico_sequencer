@@ -188,7 +188,22 @@ int recv_midi() {
 void seq_leds() {
     for (int i = 0; i < 16; i++) {
         //light up steps with this note and also light up current step LED during playing
-        bool led_state = (sequence[i] == selected_note || (playing_state == PLAYING && i == seq_pos));
+        bool is_on_position = (playing_state == PLAYING && i == seq_pos);
+
+        bool led_state = false;
+
+        if(is_on_position){
+            led_state = true;
+        }
+
+        if(sequence[i] == selected_note){
+            if(is_on_position){
+                led_state = false;
+            }else{
+                led_state = true;
+            }
+        }
+        
         gpio_put(SHIFT_DATA, led_state);
         gpio_put(CLOCK, 1);
         //sleep?
@@ -326,7 +341,7 @@ void set_button_handler() {
 }
 
 void encoder_handler() {
-    if (absolute_time_diff_us(last_enc_int_time, get_absolute_time()) < 20000) {
+    if (absolute_time_diff_us(last_enc_int_time, get_absolute_time()) < 10000) {
         return;
     }
 
