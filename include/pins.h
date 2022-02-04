@@ -7,6 +7,8 @@
 //2,3  I2C DAC
 //8-11 SPI SD card for settings & samples
 
+#define AUDIO_PIN 2
+
 //Step buttons
 #define COL_DATA 4
 #define COL_CLOCK 5

@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <algorithm>
 #include "pico/stdlib.h"
+#include <hardware/pwm.h>
+#include "sounds.h"
 
 #include "bsp/board.h"
 #include "tusb.h"
@@ -9,6 +11,8 @@
 #include "pins.h"
 #include "display.h"
 #include "constant_arr.h"
+
+#include "audio_player.h"
 
 int recv_midi();
 int bpm_to_delay(int bpm);
@@ -37,6 +41,7 @@ void change_tempo(bool);
 
 static repeating_timer_t note_timer;
 static repeating_timer_t display_timer;
+static repeating_timer_t audio_timer;
 
 static uint8_t midi_channel = 10;
 static const uint8_t cable_num = 0; // MIDI jack associated with USB endpoint
@@ -74,9 +79,29 @@ static absolute_time_t last_enc_int_time;
 static absolute_time_t last_screen_update_time;
 static absolute_time_t last_setting_int_time;
 
+static int audio_pin_slice = 0;
+
 //Expansion ideas: 
 //MIDI Port
 //Saving patterns SD
+
+void init_audio_pwm() {
+    gpio_set_function(AUDIO_PIN, GPIO_FUNC_PWM);
+    audio_pin_slice = pwm_gpio_to_slice_num(AUDIO_PIN);
+    pwm_config config = pwm_get_default_config();
+
+    pwm_config_set_clkdiv(&config, 1.0f);
+    pwm_config_set_wrap(&config, 1000); // 125kHz
+    pwm_init(audio_pin_slice, &config, true);
+
+    pwm_set_gpio_level(AUDIO_PIN, 0);
+}
+
+bool audio_timer_callback(struct repeating_timer* t) {
+    uint16_t sample = get_next_sample();
+    pwm_set_gpio_level(AUDIO_PIN, sample);
+    return true;
+}
 
 int main() {
     sleep_ms(1000);
@@ -86,6 +111,7 @@ int main() {
     setup_default_uart();
     set_interrupts();
     seq_leds();
+    init_audio_pwm();
 
     LCD_init();
 
@@ -99,6 +125,7 @@ int main() {
     last_screen_update_time = get_absolute_time();
 
     add_repeating_timer_ms(bpm_to_delay(global_tempo), note_timer_callback, NULL, &note_timer);
+    //add_repeating_timer_us(23, audio_timer_callback, NULL, &audio_timer); //23us for approx. 44100kHz
 
     while (true) {
         tud_task(); // tinyusb device task
@@ -192,18 +219,19 @@ void seq_leds() {
 
         bool led_state = false;
 
-        if(is_on_position){
+        if (is_on_position) {
             led_state = true;
         }
 
-        if(sequence[i] == selected_note){
-            if(is_on_position){
+        if (sequence[i] == selected_note) {
+            if (is_on_position) {
                 led_state = false;
-            }else{
+            }
+            else {
                 led_state = true;
             }
         }
-        
+
         gpio_put(SHIFT_DATA, led_state);
         gpio_put(CLOCK, 1);
         //sleep?
@@ -322,6 +350,7 @@ void test_button_handler() {
     uint8_t note_off[3] = { 0x80 | midi_channel, selected_note, 0 };
     tud_midi_stream_write(cable_num, note_off, 3);
 
+    set_track((uint8_t*)kick, kick_length);
 
     last_test_int_time = get_absolute_time();
 }
