@@ -48,7 +48,7 @@ static const uint8_t cable_num = 0; // MIDI jack associated with USB endpoint
 
 //0 - no note played (why would we want to play 8.18Hz anyway? ;)
 //uint8_t sequence[] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
-static uint8_t sequence[] = { 36,0,42,0,36,0,42,0,36,0,42,0,36,0,42,0 };
+static uint8_t sequence[] = { 36,0,0,0,36,0,0,0,36,0,0,0,36,0,0,0 };
 static uint32_t seq_pos = 0;
 static uint8_t last_note = 0;
 
@@ -125,7 +125,7 @@ int main() {
     last_screen_update_time = get_absolute_time();
 
     add_repeating_timer_ms(bpm_to_delay(global_tempo), note_timer_callback, NULL, &note_timer);
-    //add_repeating_timer_us(23, audio_timer_callback, NULL, &audio_timer); //23us for approx. 44100kHz
+    add_repeating_timer_us(23, audio_timer_callback, NULL, &audio_timer); //23us for approx. 44100kHz
 
     while (true) {
         tud_task(); // tinyusb device task
@@ -250,6 +250,17 @@ int bpm_to_delay(int bpm) {
     return (int)ms_per_sixteenth;
 }
 
+void play_sound(size_t note) {
+    const char* sound = instrument_sounds[note];
+    const size_t sound_len = instrument_sounds_len[note];
+    if (sound != nullptr) {
+        set_track((uint8_t*)sound, sound_len);
+    }
+    // else {
+    //     sound_reset();
+    // }
+}
+
 bool note_timer_callback(struct repeating_timer* t) {
     if (playing_state == PLAYING) {
         if (last_note != 0) {
@@ -262,7 +273,10 @@ bool note_timer_callback(struct repeating_timer* t) {
             uint8_t note_on[3] = { 0x90 | midi_channel, note, global_velocity };
             tud_midi_stream_write(cable_num, note_on, 3);
             last_note = note;
+
+            play_sound(note);
         }
+
     }
 
     if (!gpio_get(HOLD_BTN)) {
@@ -350,7 +364,7 @@ void test_button_handler() {
     uint8_t note_off[3] = { 0x80 | midi_channel, selected_note, 0 };
     tud_midi_stream_write(cable_num, note_off, 3);
 
-    set_track((uint8_t*)kick, kick_length);
+    play_sound(selected_note);
 
     last_test_int_time = get_absolute_time();
 }

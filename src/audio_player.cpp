@@ -7,7 +7,7 @@ static size_t track_length = 0;
 static bool is_playing = false;
 static bool second_nibble = false;
 
-void reset() {
+void sound_reset() {
     is_playing = false;
     decoder_reset();
     current_track = nullptr;
@@ -32,26 +32,28 @@ uint16_t get_next_sample() {
 
     if (position >= track_length) {
         //playback ended
-        reset();
+        sound_reset();
         return 0;
     }
 
     if (!second_nibble) {
         uint8_t nibble = current_track[position] >> 4;
         int16_t sample = decode_sample(nibble);
-        int sample_adjusted = 32768 + (int)sample;
+        int sample_unsigned = 32768 + (int)sample; //values 0 - 65536
+        int sample_10bit = ((float)sample_unsigned / 65536) * 1024;
 
         second_nibble = true;
-        return (uint16_t)sample;
+        return (uint16_t)sample_10bit;
     }
     else {
         uint8_t nibble = current_track[position] & 15;
         int16_t sample = decode_sample(nibble);
-        int sample_adjusted = 32768 + (int)sample;
+        int sample_unsigned = 32768 + (int)sample; //values 0 - 65536
+        int sample_10bit = ((float)sample_unsigned / 65536) * 1024;
 
         second_nibble = false;
         position++;
-        return (uint16_t)sample;
+        return (uint16_t)sample_10bit;
     }
 
 }
