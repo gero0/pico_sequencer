@@ -20,37 +20,46 @@ static int predicted_sample = 0;
 static int16_t index = 0;
 static int16_t step_size = stepsizeTable[index];
 
-void decoder_reset() {
+void adpcm_decoder_reset() {
     predicted_sample = 0;
     index = 0;
     step_size = stepsizeTable[index];
 }
 
-int16_t decode_sample(int8_t nibble) {
-    
+int16_t calculate_difference(int8_t nibble) {
     int16_t diff = 0;
-
     //some black magic fast multiplication stuff
-    if(nibble & 4)
+    if (nibble & 4)
         diff += step_size;
-    if(nibble & 2)
+    if (nibble & 2)
         diff += step_size >> 1;
-    if(nibble & 1)
+    if (nibble & 1)
         diff += step_size >> 2;
 
     diff += step_size >> 3;
 
-    if(nibble & 8)
+    if (nibble & 8)
         diff = -diff;
 
-    predicted_sample += diff;
+    return diff;
+}
 
-    if (predicted_sample > 32767) {
-        predicted_sample = 32767;
+int sample_bound_limit(int sample){
+    if (sample > 32767) {
+        sample = 32767;
     }
-    else if (predicted_sample < -32768) {
-        predicted_sample = -32768;
+    else if (sample < -32768) {
+        sample = -32768;
     }
+
+    return sample;
+}
+
+int16_t adpcm_decode_sample(int8_t nibble) {
+
+    int16_t diff = calculate_difference(nibble);
+
+    predicted_sample = sample_bound_limit(predicted_sample + diff);
 
     index = index + indexTable[nibble];
 

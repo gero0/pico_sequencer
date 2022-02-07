@@ -9,7 +9,7 @@ static bool second_nibble = false;
 
 void sound_reset() {
     is_playing = false;
-    decoder_reset();
+    adpcm_decoder_reset();
     current_track = nullptr;
     track_length = 0;
     position = 0;
@@ -21,7 +21,7 @@ void set_track(uint8_t* track, size_t track_len) {
     track_length = track_len;
     position = 0;
     second_nibble = false;
-    decoder_reset();
+    adpcm_decoder_reset();
     is_playing = true;
 }
 
@@ -59,7 +59,7 @@ uint16_t get_next_sample() {
     }
 
     uint8_t nibble = get_next_nibble();
-    int16_t sample = decode_sample(nibble);
+    int16_t sample = adpcm_decode_sample(nibble);
     int sample_10bit = convert_sample(sample);
     
     return uint16_t(sample_10bit);

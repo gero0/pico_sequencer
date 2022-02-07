@@ -3,7 +3,7 @@
 
 #include<cstdint>
 
-void decoder_reset();
-int16_t decode_sample(int8_t nibble);
+void adpcm_decoder_reset();
+int16_t adpcm_decode_sample(int8_t nibble);
 
 #endif
