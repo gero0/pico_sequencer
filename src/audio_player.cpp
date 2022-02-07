@@ -25,6 +25,28 @@ void set_track(uint8_t* track, size_t track_len) {
     is_playing = true;
 }
 
+int convert_sample(int16_t sample){
+    int sample_unsigned = 32768 + (int)sample; //values 0 - 65536
+    int sample_10bit = ((float)sample_unsigned / 65536) * 1024;
+
+    return sample_10bit;
+}
+
+uint8_t get_next_nibble(){
+    uint8_t nibble = 0;
+
+    if (!second_nibble) {
+        nibble = current_track[position] >> 4;
+    }
+    else {
+        nibble = current_track[position] & 15;
+        position++;
+    }
+
+    second_nibble = !second_nibble;
+    return nibble;
+}
+
 uint16_t get_next_sample() {
     if (!is_playing) {
         return 0;
@@ -36,24 +58,10 @@ uint16_t get_next_sample() {
         return 0;
     }
 
-    if (!second_nibble) {
-        uint8_t nibble = current_track[position] >> 4;
-        int16_t sample = decode_sample(nibble);
-        int sample_unsigned = 32768 + (int)sample; //values 0 - 65536
-        int sample_10bit = ((float)sample_unsigned / 65536) * 1024;
-
-        second_nibble = true;
-        return (uint16_t)sample_10bit;
-    }
-    else {
-        uint8_t nibble = current_track[position] & 15;
-        int16_t sample = decode_sample(nibble);
-        int sample_unsigned = 32768 + (int)sample; //values 0 - 65536
-        int sample_10bit = ((float)sample_unsigned / 65536) * 1024;
-
-        second_nibble = false;
-        position++;
-        return (uint16_t)sample_10bit;
-    }
-
+    uint8_t nibble = get_next_nibble();
+    int16_t sample = decode_sample(nibble);
+    int sample_10bit = convert_sample(sample);
+    
+    return uint16_t(sample_10bit);
 }
+
