@@ -2,7 +2,7 @@
 #include "pico/stdlib.h"
 #include "bsp/board.h"
 
-void configure_pins(){
+void gpio_configure_pins(){
     //Inputs
 
     gpio_init(COL_DATA);
@@ -70,4 +70,41 @@ void configure_pins(){
     gpio_init(DISPLAY_CLOCK);
     gpio_set_dir(DISPLAY_CLOCK, GPIO_OUT);
 
+}
+
+void gpio_set_interrupts(void (*button_irq)(uint, uint32_t)){
+    gpio_set_irq_enabled_with_callback(
+        START_STOP_BTN,
+        GPIO_IRQ_EDGE_RISE,
+        true,
+        button_irq
+    );
+
+    gpio_set_irq_enabled_with_callback(
+        TEST_BTN,
+        GPIO_IRQ_EDGE_RISE,
+        true,
+        button_irq
+    );
+
+    gpio_set_irq_enabled_with_callback(
+        SET_BTN,
+        GPIO_IRQ_EDGE_RISE,
+        true,
+        button_irq
+    );
+
+    gpio_set_irq_enabled_with_callback(
+        ENC_1,
+        GPIO_IRQ_EDGE_FALL,
+        true,
+        button_irq
+    );
+
+    gpio_set_irq_enabled_with_callback(
+        SETTING_BTN,
+        GPIO_IRQ_EDGE_RISE,
+        true,
+        button_irq
+    );
 }

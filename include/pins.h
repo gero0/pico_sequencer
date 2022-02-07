@@ -39,6 +39,7 @@
 #define ENC_1 27
 #define ENC_2 28
 
-void configure_pins();
+void gpio_configure_pins();
+void gpio_set_interrupts(void (*button_irq)(uint, uint32_t));
 
 #endif

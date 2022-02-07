@@ -4,9 +4,9 @@
 #include <cstdint>
 #include <cstdlib>
 
-void sound_reset();
-void set_track(uint8_t* track, size_t track_len);
-uint16_t get_next_sample();
+void audioplayer_sound_reset();
+void audioplayer_set_track(uint8_t* track, size_t track_len);
+uint16_t audioplayer_get_next_sample();
 
 
 #endif

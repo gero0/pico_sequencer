@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <algorithm>
 #include <pico/stdlib.h>
-#include <hardware/pwm.h>
+
 #include <bsp/board.h>
 #include "tusb.h"
 #include "usb_descriptors.h"
@@ -12,11 +12,11 @@
 #include "pins.h"
 #include "display.h"
 #include "constant_arr.h"
+#include "audio_pwm_driver.h"
 #include "audio_player.h"
 
 static repeating_timer_t note_timer;
 static repeating_timer_t display_timer;
-static repeating_timer_t audio_timer;
 
 static uint8_t sequence[] = { 36,0,0,0,36,0,0,0,36,0,0,0,36,0,0,0 };
 static uint32_t seq_pos = 0;
@@ -49,36 +49,15 @@ static absolute_time_t last_enc_int_time;
 static absolute_time_t last_screen_update_time;
 static absolute_time_t last_setting_int_time;
 
-static int audio_pin_slice = 0;
-
-
-void init_audio_pwm() {
-    gpio_set_function(AUDIO_PIN, GPIO_FUNC_PWM);
-    audio_pin_slice = pwm_gpio_to_slice_num(AUDIO_PIN);
-    pwm_config config = pwm_get_default_config();
-
-    pwm_config_set_clkdiv(&config, 1.0f);
-    pwm_config_set_wrap(&config, 1000); // 125kHz
-    pwm_init(audio_pin_slice, &config, true);
-
-    pwm_set_gpio_level(AUDIO_PIN, 0);
-}
-
-bool audio_timer_callback(struct repeating_timer* t) {
-    uint16_t sample = get_next_sample();
-    pwm_set_gpio_level(AUDIO_PIN, sample);
-    return true;
-}
-
 int main() {
     sleep_ms(1000);
     board_init();
     tusb_init();
-    configure_pins();
+    gpio_configure_pins();
     setup_default_uart();
-    set_interrupts();
+    gpio_set_interrupts(button_irq);
     seq_leds();
-    init_audio_pwm();
+    audio_init(AUDIO_PIN);
 
     LCD_init();
 
@@ -92,7 +71,7 @@ int main() {
     last_screen_update_time = get_absolute_time();
 
     add_repeating_timer_ms(bpm_to_delay(global_tempo), note_timer_callback, NULL, &note_timer);
-    add_repeating_timer_us(23, audio_timer_callback, NULL, &audio_timer); //23us for approx. 44100kHz
+    
 
     while (true) {
         tud_task(); // tinyusb device task
@@ -122,43 +101,6 @@ int main() {
             }
         }
     }
-}
-
-void set_interrupts() {
-    gpio_set_irq_enabled_with_callback(
-        START_STOP_BTN,
-        GPIO_IRQ_EDGE_RISE,
-        true,
-        button_irq
-    );
-
-    gpio_set_irq_enabled_with_callback(
-        TEST_BTN,
-        GPIO_IRQ_EDGE_RISE,
-        true,
-        button_irq
-    );
-
-    gpio_set_irq_enabled_with_callback(
-        SET_BTN,
-        GPIO_IRQ_EDGE_RISE,
-        true,
-        button_irq
-    );
-
-    gpio_set_irq_enabled_with_callback(
-        ENC_1,
-        GPIO_IRQ_EDGE_FALL,
-        true,
-        button_irq
-    );
-
-    gpio_set_irq_enabled_with_callback(
-        SETTING_BTN,
-        GPIO_IRQ_EDGE_RISE,
-        true,
-        button_irq
-    );
 }
 
 void seq_leds() {
@@ -201,7 +143,7 @@ void play_sound(size_t note) {
     const char* sound = instrument_sounds[note];
     const size_t sound_len = instrument_sounds_len[note];
     if (sound != nullptr) {
-        set_track((uint8_t*)sound, sound_len);
+        audioplayer_set_track((uint8_t*)sound, sound_len);
     }
 }
 
