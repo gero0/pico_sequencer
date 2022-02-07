@@ -7,7 +7,7 @@ static size_t track_length = 0;
 static bool is_playing = false;
 static bool second_nibble = false;
 
-void sound_reset() {
+void audioplayer_sound_reset() {
     is_playing = false;
     adpcm_decoder_reset();
     current_track = nullptr;
@@ -16,7 +16,7 @@ void sound_reset() {
     second_nibble = false;
 }
 
-void set_track(uint8_t* track, size_t track_len) {
+void audioplayer_set_track(uint8_t* track, size_t track_len) {
     current_track = track;
     track_length = track_len;
     position = 0;
@@ -47,14 +47,14 @@ uint8_t get_next_nibble(){
     return nibble;
 }
 
-uint16_t get_next_sample() {
+uint16_t audioplayer_get_next_sample() {
     if (!is_playing) {
         return 0;
     }
 
     if (position >= track_length) {
         //playback ended
-        sound_reset();
+        audioplayer_sound_reset();
         return 0;
     }
 
