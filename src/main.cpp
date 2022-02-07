@@ -1,43 +1,17 @@
 #include <stdio.h>
 #include <algorithm>
-#include "pico/stdlib.h"
+#include <pico/stdlib.h>
 #include <hardware/pwm.h>
-#include "sounds.h"
-
-#include "bsp/board.h"
+#include <bsp/board.h>
 #include "tusb.h"
 #include "usb_descriptors.h"
 
+#include "main.h"
+#include "sounds.h"
 #include "pins.h"
 #include "display.h"
 #include "constant_arr.h"
-
 #include "audio_player.h"
-
-int recv_midi();
-int bpm_to_delay(int bpm);
-void seq_leds();
-void display();
-void set_interrupts();
-void scan_inputs(bool* button_states);
-void pattern_button_pressed(uint8_t button);
-void update_display();
-
-void stop();
-void start();
-
-bool note_timer_callback(struct repeating_timer* t);
-void button_irq(uint gpio, uint32_t events);
-
-void test_button_handler();
-void start_stop_button_handler();
-void set_button_handler();
-void encoder_handler();
-void setting_button_handler();
-
-void change_note(bool);
-void change_velocity(bool);
-void change_tempo(bool);
 
 static repeating_timer_t note_timer;
 static repeating_timer_t display_timer;
@@ -81,9 +55,6 @@ static absolute_time_t last_setting_int_time;
 
 static int audio_pin_slice = 0;
 
-//Expansion ideas: 
-//MIDI Port
-//Saving patterns SD
 
 void init_audio_pwm() {
     gpio_set_function(AUDIO_PIN, GPIO_FUNC_PWM);
@@ -129,7 +100,7 @@ int main() {
 
     while (true) {
         tud_task(); // tinyusb device task
-        recv_midi();
+        MIDI_recv();
         seq_leds();
 
         if (absolute_time_diff_us(last_screen_update_time, get_absolute_time()) > 200000) {
@@ -194,7 +165,7 @@ void set_interrupts() {
     );
 }
 
-int recv_midi() {
+int MIDI_recv() {
     uint8_t packet[4];
     if (tud_midi_available()) {
         bool result = tud_midi_packet_read(packet);
