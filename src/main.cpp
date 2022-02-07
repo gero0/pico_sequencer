@@ -7,6 +7,7 @@
 #include "usb_descriptors.h"
 
 #include "main.h"
+#include "midi.h"
 #include "sounds.h"
 #include "pins.h"
 #include "display.h"
@@ -17,11 +18,6 @@ static repeating_timer_t note_timer;
 static repeating_timer_t display_timer;
 static repeating_timer_t audio_timer;
 
-static uint8_t midi_channel = 10;
-static const uint8_t cable_num = 0; // MIDI jack associated with USB endpoint
-
-//0 - no note played (why would we want to play 8.18Hz anyway? ;)
-//uint8_t sequence[] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 static uint8_t sequence[] = { 36,0,0,0,36,0,0,0,36,0,0,0,36,0,0,0 };
 static uint32_t seq_pos = 0;
 static uint8_t last_note = 0;
@@ -100,7 +96,7 @@ int main() {
 
     while (true) {
         tud_task(); // tinyusb device task
-        MIDI_recv();
+        MIDI_usb_recv();
         seq_leds();
 
         if (absolute_time_diff_us(last_screen_update_time, get_absolute_time()) > 200000) {
@@ -165,24 +161,6 @@ void set_interrupts() {
     );
 }
 
-int MIDI_recv() {
-    uint8_t packet[4];
-    if (tud_midi_available()) {
-        bool result = tud_midi_packet_read(packet);
-
-        if (result) {
-            // for (int i = 0; i < 4; i++)
-            //     printf("%X ", packet[i]);
-            // printf("\n");
-        }
-
-        return 4;
-    }
-    else {
-        return 0;
-    }
-}
-
 void seq_leds() {
     for (int i = 0; i < 16; i++) {
         //light up steps with this note and also light up current step LED during playing
@@ -205,12 +183,10 @@ void seq_leds() {
 
         gpio_put(SHIFT_DATA, led_state);
         gpio_put(CLOCK, 1);
-        //sleep?
         gpio_put(CLOCK, 0);
     }
 
     gpio_put(LATCH, 1);
-    //sleep?
     gpio_put(LATCH, 0);
 }
 
@@ -227,22 +203,18 @@ void play_sound(size_t note) {
     if (sound != nullptr) {
         set_track((uint8_t*)sound, sound_len);
     }
-    // else {
-    //     sound_reset();
-    // }
 }
 
 bool note_timer_callback(struct repeating_timer* t) {
     if (playing_state == PLAYING) {
         if (last_note != 0) {
-            uint8_t note_off[3] = { 0x80 | midi_channel, last_note, 0 };
-            tud_midi_stream_write(cable_num, note_off, 3);
+            MIDI_usb_note_off(last_note);
+            
         }
 
         uint8_t note = sequence[seq_pos];
         if (note != 0) {
-            uint8_t note_on[3] = { 0x90 | midi_channel, note, global_velocity };
-            tud_midi_stream_write(cable_num, note_on, 3);
+            MIDI_usb_note_on(note, global_velocity);
             last_note = note;
 
             play_sound(note);
@@ -311,8 +283,7 @@ void start_stop_button_handler() {
 
 void stop() {
     playing_state = STOPPED;
-    uint8_t note_off[3] = { 0x80 | midi_channel, last_note, 0 };
-    tud_midi_stream_write(cable_num, note_off, 3);
+    MIDI_usb_note_off(last_note);
     last_note = 0;
 }
 
@@ -329,11 +300,8 @@ void test_button_handler() {
         return;
     }
 
-    uint8_t note_on[3] = { 0x90 | midi_channel, selected_note, global_velocity };
-    tud_midi_stream_write(cable_num, note_on, 3);
-
-    uint8_t note_off[3] = { 0x80 | midi_channel, selected_note, 0 };
-    tud_midi_stream_write(cable_num, note_off, 3);
+    MIDI_usb_note_on(selected_note, global_velocity);
+    MIDI_usb_note_off(selected_note);
 
     play_sound(selected_note);
 
