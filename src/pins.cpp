@@ -1,5 +1,4 @@
 #include "pins.h"
-#include "pico/stdlib.h"
 #include "bsp/board.h"
 
 void gpio_configure_pins(){

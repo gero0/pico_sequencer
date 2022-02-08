@@ -11,7 +11,7 @@
 #include "sounds.h"
 #include "pins.h"
 #include "display.h"
-#include "constant_arr.h"
+#include "string_consts.h"
 #include "audio_pwm_driver.h"
 #include "audio_player.h"
 
@@ -50,7 +50,22 @@ static absolute_time_t last_screen_update_time;
 static absolute_time_t last_setting_int_time;
 
 int main() {
-    sleep_ms(1000);
+    initialize();
+
+    while (true) {
+        tud_task(); // tinyusb device task
+        MIDI_usb_recv();
+        seq_leds();
+        step_buttons_scan();
+
+        if (absolute_time_diff_us(last_screen_update_time, get_absolute_time()) > 200000) {
+            update_display();
+            last_screen_update_time = get_absolute_time();
+        }
+    }
+}
+
+void initialize() {
     board_init();
     tusb_init();
     gpio_configure_pins();
@@ -58,70 +73,24 @@ int main() {
     gpio_set_interrupts(button_irq);
     seq_leds();
     audio_init(AUDIO_PIN);
-
     LCD_init();
+    timers_init();
+}
 
-    //Start/stop button irq
+void timers_init() {
     last_startstop_int_time = get_absolute_time();
     last_test_int_time = get_absolute_time();
     last_set_int_time = get_absolute_time();
     last_enc_int_time = get_absolute_time();
     last_setting_int_time = get_absolute_time();
-
     last_screen_update_time = get_absolute_time();
 
     add_repeating_timer_ms(bpm_to_delay(global_tempo), note_timer_callback, NULL, &note_timer);
-    
-
-    while (true) {
-        tud_task(); // tinyusb device task
-        MIDI_usb_recv();
-        seq_leds();
-
-        if (absolute_time_diff_us(last_screen_update_time, get_absolute_time()) > 200000) {
-            update_display();
-            last_screen_update_time = get_absolute_time();
-        }
-
-        //scan twice to debounce
-        bool button_states[] = { false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false };
-        scan_inputs(button_states);
-
-        // sleep_ms(10);
-
-        bool button_states2[] = { false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false };
-        scan_inputs(button_states2);
-
-        //detect input only if detected in both scans
-        for (int i = 0; i < 16; i++) {
-            if (button_states[i] == button_states2[i]) {
-                if (button_states[i]) {
-                    pattern_button_pressed(i);
-                }
-            }
-        }
-    }
 }
 
 void seq_leds() {
     for (int i = 0; i < 16; i++) {
-        //light up steps with this note and also light up current step LED during playing
-        bool is_on_position = (playing_state == PLAYING && i == seq_pos);
-
-        bool led_state = false;
-
-        if (is_on_position) {
-            led_state = true;
-        }
-
-        if (sequence[i] == selected_note) {
-            if (is_on_position) {
-                led_state = false;
-            }
-            else {
-                led_state = true;
-            }
-        }
+        bool led_state = check_led_state(i);
 
         gpio_put(SHIFT_DATA, led_state);
         gpio_put(CLOCK, 1);
@@ -132,6 +101,67 @@ void seq_leds() {
     gpio_put(LATCH, 0);
 }
 
+bool check_led_state(int led_id) {
+    //light up current step during playing
+    bool is_on_position = (playing_state == PLAYING && led_id == seq_pos);
+    bool led_state = false;
+
+    if (is_on_position)
+        led_state = true;
+
+    //also light up steps with selected note
+    //we want to blink the led when the sequence passes through selected step for better visual feedback
+    if (sequence[led_id] == selected_note)
+        led_state = !is_on_position;
+
+    return led_state;
+}
+
+void step_buttons_scan() {
+    //scan twice to debounce
+    bool button_states[] = { false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false };
+    scan_inputs(button_states);
+
+    bool button_states2[] = { false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false };
+    scan_inputs(button_states2);
+
+    //detect input only if detected in both scans
+    for (int i = 0; i < 16; i++) {
+        if (button_states[i] == button_states2[i]) {
+            if (button_states[i]) {
+                pattern_button_pressed(i);
+            }
+        }
+    }
+}
+
+void scan_inputs(bool* button_states) {
+    //latch and clock connected
+    gpio_put(COL_DATA, 1);
+    gpio_put(COL_CLOCK, 1);
+    gpio_put(COL_CLOCK, 0);
+
+    for (int i = 0; i < 16; i++) {
+        gpio_put(COL_DATA, 0);
+        gpio_put(COL_CLOCK, 1);
+        gpio_put(COL_CLOCK, 0);
+
+        sleep_us(10);
+
+        button_states[i] = gpio_get(ROW0);
+    }
+}
+
+void pattern_button_pressed(uint8_t button) {
+    //other modes(eg. sequence selection) can be handled here
+    if (gpio_get(CLEAR_BTN)) {
+        sequence[button] = 0;
+    }
+    else {
+        sequence[button] = selected_note;
+    }
+}
+
 int bpm_to_delay(int bpm) {
     float seconds_per_beat = 60.0 / bpm;
     float seconds_per_sixteenth = seconds_per_beat / 4;
@@ -139,29 +169,9 @@ int bpm_to_delay(int bpm) {
     return (int)ms_per_sixteenth;
 }
 
-void play_sound(size_t note) {
-    const char* sound = instrument_sounds[note];
-    const size_t sound_len = instrument_sounds_len[note];
-    if (sound != nullptr) {
-        audioplayer_set_track((uint8_t*)sound, sound_len);
-    }
-}
-
 bool note_timer_callback(struct repeating_timer* t) {
     if (playing_state == PLAYING) {
-        if (last_note != 0) {
-            MIDI_usb_note_off(last_note);
-            
-        }
-
-        uint8_t note = sequence[seq_pos];
-        if (note != 0) {
-            MIDI_usb_note_on(note, global_velocity);
-            last_note = note;
-
-            play_sound(note);
-        }
-
+        send_current_midi_note();
     }
 
     if (!gpio_get(HOLD_BTN)) {
@@ -169,14 +179,24 @@ bool note_timer_callback(struct repeating_timer* t) {
         seq_pos %= sizeof(sequence);
     }
 
-    if (seq_pos % 4 == 0) {
-        gpio_put(TEMPO_LED, 1);
-    }
-    else {
-        gpio_put(TEMPO_LED, 0);
-    }
+    //blink every 4 steps
+    gpio_put(TEMPO_LED, (seq_pos % 4 == 0));
 
     return true;
+}
+
+void send_current_midi_note() {
+    if (last_note != 0) {
+        MIDI_usb_note_off(last_note);
+    }
+
+    uint8_t note = sequence[seq_pos];
+    if (note != 0) {
+        MIDI_usb_note_on(note, global_velocity);
+        last_note = note;
+
+        audio_play_sound(note);
+    }
 }
 
 void button_irq(uint gpio, uint32_t events) {
@@ -199,34 +219,24 @@ void button_irq(uint gpio, uint32_t events) {
 }
 
 void start_stop_button_handler() {
-
     if (absolute_time_diff_us(last_startstop_int_time, get_absolute_time()) < 500000) {
         return;
     }
 
-    //clear entire sequence
     if (gpio_get(CLEAR_BTN)) {
+        //clear entire sequence
         for (int i = 0; i < 16; i++) {
             sequence[i] = 0;
         }
     }
     else {
-        if (playing_state == STOPPED) {
+        if (playing_state == STOPPED)
             start();
-        }
-        else {
+        else
             stop();
-        }
     }
 
     last_startstop_int_time = get_absolute_time();
-
-}
-
-void stop() {
-    playing_state = STOPPED;
-    MIDI_usb_note_off(last_note);
-    last_note = 0;
 }
 
 void start() {
@@ -234,6 +244,12 @@ void start() {
     seq_pos = 0;
     playing_state = PLAYING;
     add_repeating_timer_ms(bpm_to_delay(global_tempo), note_timer_callback, NULL, &note_timer);
+}
+
+void stop() {
+    playing_state = STOPPED;
+    MIDI_usb_note_off(last_note);
+    last_note = 0;
 }
 
 void test_button_handler() {
@@ -245,7 +261,7 @@ void test_button_handler() {
     MIDI_usb_note_on(selected_note, global_velocity);
     MIDI_usb_note_off(selected_note);
 
-    play_sound(selected_note);
+    audio_play_sound(selected_note);
 
     last_test_int_time = get_absolute_time();
 }
@@ -262,6 +278,18 @@ void set_button_handler() {
     sequence[seq_pos] = selected_note;
 
     last_set_int_time = get_absolute_time();
+}
+
+void setting_button_handler() {
+
+    if (absolute_time_diff_us(last_setting_int_time, get_absolute_time()) < 500000) {
+        return;
+    }
+
+    current_setting++;
+    current_setting %= 3;
+
+    last_setting_int_time = get_absolute_time();
 }
 
 void encoder_handler() {
@@ -320,52 +348,20 @@ void change_tempo(bool increment) {
     }
 }
 
-void setting_button_handler() {
-
-    if (absolute_time_diff_us(last_setting_int_time, get_absolute_time()) < 500000) {
-        return;
-    }
-
-    current_setting++;
-    current_setting %= 3;
-
-    last_setting_int_time = get_absolute_time();
-}
-
-void scan_inputs(bool* button_states) {
-    //latch and clock connected
-    gpio_put(COL_DATA, 1);
-    gpio_put(COL_CLOCK, 1);
-    gpio_put(COL_CLOCK, 0);
-
-    for (int i = 0; i < 16; i++) {
-        gpio_put(COL_DATA, 0);
-        gpio_put(COL_CLOCK, 1);
-        gpio_put(COL_CLOCK, 0);
-
-        sleep_us(10);
-
-        button_states[i] = gpio_get(ROW0);
-    }
-}
-
-void pattern_button_pressed(uint8_t button) {
-    //other modes(eg. sequence selection) can be handled here
-    if (gpio_get(CLEAR_BTN)) {
-        sequence[button] = 0;
-    }
-    else {
-        sequence[button] = selected_note;
-    }
-}
-
 void update_display() {
     char first_line_buffer[16];
     char second_line_buffer[16];
 
+    int n = format_first_line(first_line_buffer, sizeof(first_line_buffer));
+    int n2 = format_second_line(second_line_buffer, sizeof(second_line_buffer));
+
+    write_to_display(first_line_buffer, n, second_line_buffer, n2);
+}
+
+int format_first_line(char* buffer, int buflen) {
     int n = snprintf(
-        first_line_buffer,
-        sizeof(first_line_buffer),
+        buffer,
+        buflen,
         "%c%3s(%3d)%cT:%d",
         settings[current_setting] == NOTE ? '>' : ' ',
         notes[selected_note],
@@ -374,25 +370,33 @@ void update_display() {
         global_tempo
     );
 
+    return n;
+}
+
+int format_second_line(char* buffer, int buflen) {
     const char* instrument = instrument_mapping[selected_note];
 
-    int n2 = snprintf(
-        second_line_buffer,
-        sizeof(second_line_buffer),
+    int n = snprintf(
+        buffer,
+        buflen,
         "%9s%cV:%3d",
         instrument,
         settings[current_setting] == GL_VELOCITY ? '>' : ' ',
         global_velocity
     );
 
+    return n;
+}
+
+void write_to_display(char* first_line, int n1, char* second_line, int n2){
     LCD_clear();
     sleep_ms(1);
     LCD_position(1, 1);
     sleep_ms(1);
-    LCD_write_text(first_line_buffer, std::min(16, n));
+    LCD_write_text(first_line, std::min(16, n1));
     sleep_ms(1);
     LCD_position(2, 1);
     sleep_ms(1);
-    LCD_write_text(second_line_buffer, std::min(16, n2));
+    LCD_write_text(second_line, std::min(16, n2));
     sleep_ms(1);
 }

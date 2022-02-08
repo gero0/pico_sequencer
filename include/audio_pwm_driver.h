@@ -5,5 +5,6 @@
 
 void audio_init(int audio_pin);
 bool audio_timer_callback(struct repeating_timer* t);
+void audio_play_sound(size_t note);
 
 #endif

@@ -1,6 +1,9 @@
 #ifndef __PINS__
 #define __PINS__
 
+#include <cstdint>
+#include "pico/stdlib.h"
+
 //Reserved
 //0,1
 //UART for MIDI
