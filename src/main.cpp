@@ -51,7 +51,7 @@ static absolute_time_t last_setting_int_time;
 
 int main() {
     initialize();
-
+    
     while (true) {
         tud_task(); // tinyusb device task
         MIDI_usb_recv();
