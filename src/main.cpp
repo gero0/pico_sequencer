@@ -8,12 +8,9 @@
 
 #include "main.h"
 #include "midi.h"
-#include "sounds.h"
 #include "pins.h"
 #include "display.h"
 #include "string_consts.h"
-#include "audio_pwm_driver.h"
-#include "audio_player.h"
 
 static repeating_timer_t note_timer;
 static repeating_timer_t display_timer;
@@ -72,7 +69,6 @@ void initialize() {
     setup_default_uart();
     gpio_set_interrupts(button_irq);
     seq_leds();
-    audio_init(AUDIO_PIN);
     LCD_init();
     timers_init();
 }
@@ -194,8 +190,6 @@ void send_current_midi_note() {
     if (note != 0) {
         MIDI_usb_note_on(note, global_velocity);
         last_note = note;
-
-        audio_play_sound(note);
     }
 }
 
@@ -260,8 +254,6 @@ void test_button_handler() {
 
     MIDI_usb_note_on(selected_note, global_velocity);
     MIDI_usb_note_off(selected_note);
-
-    audio_play_sound(selected_note);
 
     last_test_int_time = get_absolute_time();
 }

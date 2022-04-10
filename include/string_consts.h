@@ -1,8 +1,6 @@
 #ifndef __CONST_ARRAYS__
 #define __CONST_ARRAYS__
 
-#include "sounds.h"
-
 const char* instrument_mapping[] = { 
     "",
     "",
