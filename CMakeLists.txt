@@ -14,7 +14,7 @@ file(GLOB SRC_FILES "src/*.cpp") # Load all files in src folder
 
 # rest of your project
 add_executable(pico_midi ${SRC_FILES})
-target_link_libraries(pico_midi pico_stdlib pico_time pico_sync pico_util tinyusb_device tinyusb_board hardware_pwm hardware_timer)
+target_link_libraries(pico_midi pico_stdlib pico_time pico_sync pico_util pico_bootsel_via_double_reset tinyusb_device tinyusb_board hardware_pwm hardware_timer hardware_i2c)
 target_include_directories(pico_midi PRIVATE "./include")
 target_include_directories(pico_midi PRIVATE "${PICO_SDK_PATH}/lib/tinyusb/src/class")
 
