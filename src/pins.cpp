@@ -58,17 +58,6 @@ void gpio_configure_pins(){
     gpio_set_dir(ENC_2, GPIO_IN);
     gpio_pull_up(ENC_2);
 
-    //Display SR
-    gpio_init(DISPLAY_DATA);
-    gpio_set_dir(DISPLAY_DATA, GPIO_OUT);
-
-    gpio_init(DISPLAY_E);
-    gpio_set_dir(DISPLAY_E, GPIO_OUT);
-    gpio_put(DISPLAY_E, 1);
-    
-    gpio_init(DISPLAY_CLOCK);
-    gpio_set_dir(DISPLAY_CLOCK, GPIO_OUT);
-
 }
 
 void gpio_set_interrupts(void (*button_irq)(uint, uint32_t)){

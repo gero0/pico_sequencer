@@ -1,39 +1,42 @@
+#include <hardware/gpio.h>
+#include <pico/stdlib.h>
+#include <pico/binary_info.h>
+#include <hardware/i2c.h>
+#include "pico/time.h"
 #include "pins.h"
-#include "pico/stdlib.h"
+
+//PCF8574 pin definitions
+#define MASK_RS         1   // P0
+#define MASK_RW         2   // P1
+#define MASK_E          4   // P2
+#define S_BACKLIGHT 3   // P3
+#define S_DATA      4   // P4-P7
+
+#define SCREEN_ADDRESS 0x27
 
 void LCD_write_nibble(uint8_t nibble, bool rs) {
-    gpio_put(DISPLAY_E, 1);
+    uint8_t output = (1 << S_BACKLIGHT) | (nibble << S_DATA);
 
-    for (int i = 3; i >= 0; i--) {
-        bool state = ((nibble >> i) & 1) != 0;
-        //bool state = true;
-        gpio_put(DISPLAY_DATA, state);
-        gpio_put(DISPLAY_CLOCK, 1);
-        gpio_put(DISPLAY_CLOCK, 0);
+    if(rs){
+        output |= MASK_RS;
     }
 
-    gpio_put(DISPLAY_DATA, rs);
-    gpio_put(DISPLAY_CLOCK, 1);
-    gpio_put(DISPLAY_CLOCK, 0);
-    //One more pulse(tied clock and latch)
-    gpio_put(DISPLAY_CLOCK, 1);
-    gpio_put(DISPLAY_CLOCK, 0);
+    uint8_t output_m = output | MASK_E;
 
-    //execute command
-    gpio_put(DISPLAY_E, 0);
-    gpio_put(DISPLAY_E, 1);
+    i2c_write_blocking(i2c0, SCREEN_ADDRESS, &output_m, 1, false);
+    i2c_write_blocking(i2c0, SCREEN_ADDRESS, &output, 1, false);
 }
 
 void LCD_write_byte(uint8_t byte) {
     uint8_t low_nibble = byte & 0xF;
-    uint8_t high_nibble = byte >> 4;
+    uint8_t high_nibble = (byte >> 4) & 0xF;
     LCD_write_nibble(high_nibble, true);
     LCD_write_nibble(low_nibble, true);
 }
 
 void LCD_write_command(uint8_t command) {
     uint8_t low_nibble = command & 0xF;
-    uint8_t high_nibble = command >> 4;
+    uint8_t high_nibble = (command >> 4) & 0xF;
     LCD_write_nibble(high_nibble, false);
     LCD_write_nibble(low_nibble, false);
 }
@@ -41,7 +44,6 @@ void LCD_write_command(uint8_t command) {
 void LCD_write_text(char* text, uint32_t len) {
     for (int i = 0; i < len; i++) {
         LCD_write_byte(text[i]);
-        sleep_ms(1);
     }
 }
 
@@ -55,20 +57,39 @@ void LCD_position(uint8_t x, uint8_t y) {
     LCD_write_command(temp);
 }
 
+void LCD_write_init_nibble(uint8_t nibble){
+    uint8_t output = ((nibble >> 4) & 0x0f) << S_DATA;
+    uint8_t output_m = (((nibble >> 4) & 0x0f) << S_DATA) | MASK_E;
+    i2c_write_blocking(i2c0, SCREEN_ADDRESS, &output_m, 1, false);
+    i2c_write_blocking(i2c0, SCREEN_ADDRESS, &output, 1, false);
+}
+
+
 void LCD_init() {
+    i2c_init(i2c0, 100 * 1000);
+    gpio_set_function(DISPLAY_SDA, GPIO_FUNC_I2C);
+    gpio_set_function(DISPLAY_SCL, GPIO_FUNC_I2C);
+    gpio_pull_up(DISPLAY_SDA);
+    gpio_pull_up(DISPLAY_SCL);
+    bi_decl(bi_2pins_with_func(DISPLAY_SDA, DISPLAY_SCL, GPIO_FUNC_I2C));
+    
     sleep_ms(50);
-    LCD_write_command(0x20); // Wake-Up Sequence
-    sleep_ms(50);
-    LCD_write_command(0x20);
-    sleep_ms(50);
-    LCD_write_command(0x20);
-    sleep_ms(50);
+    LCD_write_init_nibble(0x20); // Wake-Up Sequence
+    sleep_ms(5);
+    LCD_write_init_nibble(0x20);
+    sleep_ms(5);
+    LCD_write_init_nibble(0x20);
+    sleep_ms(5);
+
+    // //4 bit mode
+    // LCD_write_init_nibble(0x20);
+    // sleep_ms(5);
     LCD_write_command(0x28); // 4-bits, 2 lines, 5x7 font
-    sleep_ms(50);
+    sleep_ms(5);
     LCD_write_command(0x0C); // Display ON, No cursors
-    sleep_ms(50);
+    sleep_ms(5);
     LCD_write_command(0x06); // Entry mode- Auto-increment, No Display shifting
-    sleep_ms(50);
+    sleep_ms(5);
     LCD_write_command(0x01);
-    sleep_ms(50);
+    sleep_ms(5);
 }

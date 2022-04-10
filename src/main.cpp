@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include <cstdio>
 #include <algorithm>
 #include <pico/stdlib.h>
 
@@ -24,7 +24,7 @@ static uint8_t last_note = 0;
 
 static uint32_t global_tempo = 120;
 static uint8_t global_velocity = 127;
-static uint8_t selected_note = 39;
+static uint8_t selected_note = 36;
 
 enum PlayingState {
     STOPPED,
@@ -135,7 +135,7 @@ void step_buttons_scan() {
     }
 }
 
-void scan_inputs(bool* button_states) {
+void scan_inputs(bool button_states[]) {
     //latch and clock connected
     gpio_put(COL_DATA, 1);
     gpio_put(COL_CLOCK, 1);
@@ -390,7 +390,7 @@ int format_second_line(char* buffer, int buflen) {
 
 void write_to_display(char* first_line, int n1, char* second_line, int n2){
     LCD_clear();
-    sleep_ms(1);
+    sleep_ms(2);
     LCD_position(1, 1);
     sleep_ms(1);
     LCD_write_text(first_line, std::min(16, n1));
