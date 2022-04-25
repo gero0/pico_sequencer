@@ -1,7 +1,8 @@
 #include "pins.h"
 #include "bsp/board.h"
 
-void gpio_configure_pins(){
+void gpio_configure_pins()
+{
     //Inputs
 
     gpio_init(COL_DATA);
@@ -20,7 +21,7 @@ void gpio_configure_pins(){
 
     gpio_init(LATCH);
     gpio_set_dir(LATCH, GPIO_OUT);
-    
+
     gpio_init(CLOCK);
     gpio_set_dir(CLOCK, GPIO_OUT);
 
@@ -57,42 +58,37 @@ void gpio_configure_pins(){
     gpio_init(ENC_2);
     gpio_set_dir(ENC_2, GPIO_IN);
     gpio_pull_up(ENC_2);
-
 }
 
-void gpio_set_interrupts(void (*button_irq)(uint, uint32_t)){
+void gpio_set_interrupts(void (*button_irq)(uint, uint32_t))
+{
     gpio_set_irq_enabled_with_callback(
         START_STOP_BTN,
         GPIO_IRQ_EDGE_RISE,
         true,
-        button_irq
-    );
+        button_irq);
 
     gpio_set_irq_enabled_with_callback(
         TEST_BTN,
         GPIO_IRQ_EDGE_RISE,
         true,
-        button_irq
-    );
+        button_irq);
 
     gpio_set_irq_enabled_with_callback(
         SET_BTN,
         GPIO_IRQ_EDGE_RISE,
         true,
-        button_irq
-    );
+        button_irq);
 
     gpio_set_irq_enabled_with_callback(
         ENC_1,
         GPIO_IRQ_EDGE_FALL,
         true,
-        button_irq
-    );
+        button_irq);
 
     gpio_set_irq_enabled_with_callback(
         SETTING_BTN,
         GPIO_IRQ_EDGE_RISE,
         true,
-        button_irq
-    );
+        button_irq);
 }
