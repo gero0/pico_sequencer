@@ -10,7 +10,7 @@ project(pico_midi)
 # initialize the Raspberry Pi Pico SDK
 pico_sdk_init()
 
-file(GLOB SRC_FILES "src/*.cpp") # Load all files in src folder
+file(GLOB SRC_FILES CONFIGURE_DEPENDS "src/*.cpp") # Load all files in src folder
 
 # rest of your project
 add_executable(pico_midi ${SRC_FILES})
