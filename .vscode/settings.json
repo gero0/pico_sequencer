@@ -1,6 +1,6 @@
 {
     "clangd.arguments": [
-    "--query-driver=/usr/bin/arm-none-eabi-g++",
+    "--query-driver=/usr/bin/arm-none-eabi-g*",
     "--clang-tidy"
     ]
 }

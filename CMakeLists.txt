@@ -5,7 +5,10 @@ cmake_minimum_required(VERSION 3.13)
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 include(pico_sdk_import.cmake)
 
-project(pico_midi)
+set(CMAKE_C_COMPILER arm-none-eabi-gcc)
+set(CMAKE_CXX_COMPILER arm-none-eabi-g++)
+
+project(pico_midi LANGUAGES CXX C)
 
 # initialize the Raspberry Pi Pico SDK
 pico_sdk_init()
@@ -20,4 +23,3 @@ target_include_directories(pico_midi PRIVATE "${PICO_SDK_PATH}/lib/tinyusb/src/c
 
 # create map/bin/hex/uf2 file in addition to ELF.
 pico_add_extra_outputs(pico_midi)
-pico_enable_stdio_usb(pico_midi 1)
