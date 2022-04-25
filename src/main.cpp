@@ -65,11 +65,17 @@ int main() {
   }
 }
 
+void setup_midi_uart(){
+  uart_init(uart0, 31250);
+  gpio_set_function(MIDI_TX, GPIO_FUNC_UART);
+  gpio_set_function(MIDI_RX, GPIO_FUNC_UART);
+}
+
 void initialize() {
   board_init();
   tusb_init();
   gpio_configure_pins();
-  setup_default_uart();
+  setup_midi_uart();
   gpio_set_interrupts(button_irq);
   seq_leds();
   LCD_init();
@@ -106,8 +112,8 @@ bool check_led_state(int led_id) {
   bool is_on_position = (playing_state == PLAYING && led_id == seq_pos);
   bool led_state = false;
 
-  //light up all notes when clear butoon is pressed
-  if(sequence[led_id] != 0 && gpio_get(CLEAR_BTN)){
+  // light up all notes when clear butoon is pressed
+  if (sequence[led_id] != 0 && gpio_get(CLEAR_BTN)) {
     return true;
   }
 
@@ -118,7 +124,7 @@ bool check_led_state(int led_id) {
   // we want to blink the led when the sequence passes through selected step for
   // better visual feedback
   if (sequence[led_id] == selected_note) {
-      led_state = !is_on_position;
+    led_state = !is_on_position;
   }
 
   return led_state;
@@ -198,11 +204,13 @@ bool note_timer_callback(struct repeating_timer *t) {
 void send_current_midi_note() {
   if (last_note != 0) {
     MIDI_usb_note_off(last_note);
+    MIDI_note_off(last_note);
   }
 
   uint8_t note = sequence[seq_pos];
   if (note != 0) {
     MIDI_usb_note_on(note, global_velocity);
+    MIDI_note_on(note, global_velocity);
     last_note = note;
   }
 }
@@ -258,6 +266,7 @@ void start() {
 void stop() {
   playing_state = STOPPED;
   MIDI_usb_note_off(last_note);
+  MIDI_note_off(last_note);
   last_note = 0;
 }
 
@@ -268,7 +277,9 @@ void test_button_handler() {
   }
 
   MIDI_usb_note_on(selected_note, global_velocity);
+  MIDI_note_on(selected_note, global_velocity);
   MIDI_usb_note_off(selected_note);
+  MIDI_note_off(selected_note);
 
   last_test_int_time = get_absolute_time();
 }

@@ -5,6 +5,7 @@
 
 int bpm_to_delay(int bpm);
 void initialize();
+void setup_midi_uart();
 void timers_init();
 bool check_led_state(int led_id);
 void seq_leds();

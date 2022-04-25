@@ -4,11 +4,13 @@
 #include <cstdint>
 #include "pico/stdlib.h"
 
-//Reserved
-//0,1
+
 //UART for MIDI
 //8-11 SPI SD card for settings & samples
 //26 unused
+
+#define MIDI_TX 0
+#define MIDI_RX 1
 
 #define AUDIO_PIN 2
 
