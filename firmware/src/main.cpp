@@ -48,6 +48,8 @@ static absolute_time_t last_enc_int_time;
 static absolute_time_t last_screen_update_time;
 static absolute_time_t last_setting_int_time;
 
+static bool tempo_changed = false;
+
 int main()
 {
     initialize();
@@ -174,8 +176,7 @@ void pattern_button_pressed(uint8_t button)
         sequence[button] = 0;
     } else if (gpio_get(SETTING_BTN)) {
         selected_note = 36 + button;
-    }
-    else {
+    } else {
         sequence[button] = selected_note;
     }
 }
@@ -200,10 +201,14 @@ bool note_timer_callback(struct repeating_timer* t)
     }
 
     // blink every 4 steps
-    if (playing_state == PLAYING)
-        gpio_put(TEMPO_LED, (seq_pos % 4 == 0));
-    else
-        gpio_put(TEMPO_LED, 1);
+    gpio_put(TEMPO_LED, (seq_pos % 4 == 0));
+
+    if (tempo_changed) {
+        tempo_changed = false;
+        cancel_repeating_timer(&note_timer);
+        add_repeating_timer_ms(bpm_to_delay(global_tempo), note_timer_callback, NULL,
+            &note_timer);
+    }
 
     return true;
 }
@@ -379,6 +384,8 @@ void change_tempo(bool increment)
             global_tempo++;
         }
     }
+
+    tempo_changed = true;
 }
 
 void update_display()
