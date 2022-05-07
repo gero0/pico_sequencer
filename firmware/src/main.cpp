@@ -181,7 +181,10 @@ void pattern_button_pressed(uint8_t button)
     // other modes(eg. sequence selection) can be handled here
     if (gpio_get(CLEAR_BTN)) {
         sequence[button] = 0;
-    } else {
+    } else if (gpio_get(SETTING_BTN)) {
+        selected_note = 36 + button;
+    }
+    else {
         sequence[button] = selected_note;
     }
 }
@@ -206,7 +209,10 @@ bool note_timer_callback(struct repeating_timer* t)
     }
 
     // blink every 4 steps
-    gpio_put(TEMPO_LED, (seq_pos % 4 == 0));
+    if (playing_state == PLAYING)
+        gpio_put(TEMPO_LED, (seq_pos % 4 == 0));
+    else
+        gpio_put(TEMPO_LED, 1);
 
     return true;
 }
