@@ -137,23 +137,14 @@ bool check_led_state(int led_id)
 
 void step_buttons_scan()
 {
-    // scan twice to debounce
     bool button_states[] = { false, false, false, false, false, false,
         false, false, false, false, false, false,
         false, false, false, false };
     scan_inputs(button_states);
 
-    bool button_states2[] = { false, false, false, false, false, false,
-        false, false, false, false, false, false,
-        false, false, false, false };
-    scan_inputs(button_states2);
-
-    // detect input only if detected in both scans
     for (int i = 0; i < 16; i++) {
-        if (button_states[i] == button_states2[i]) {
-            if (button_states[i]) {
-                pattern_button_pressed(i);
-            }
+        if (button_states[i]) {
+            pattern_button_pressed(i);
         }
     }
 }
