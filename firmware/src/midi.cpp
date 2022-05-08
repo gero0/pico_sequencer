@@ -5,7 +5,7 @@
 #define MIDI_NOTE_ON 0x90
 #define MIDI_NOTE_OFF 0x80
 
-static uint8_t midi_channel = 10;
+static uint8_t midi_channel = 9;
 static uint8_t cable_num = 0; // MIDI jack associated with USB endpoint
 
 void MIDI_Init(uint8_t channel, uint8_t cable_number)
