@@ -16,10 +16,29 @@
 static repeating_timer_t note_timer;
 static repeating_timer_t display_timer;
 
-static uint8_t sequence[] = { 36, 0, 0, 0, 36, 0, 0, 0,
-    36, 0, 0, 0, 36, 0, 0, 0 };
+const uint8_t max_notes_per_step = 8;
+
+static uint8_t sequence[16][max_notes_per_step] = {
+    { 36, 0, 0, 0 },
+    { 0, 0, 0, 0 },
+    { 0, 0, 0, 0 },
+    { 0, 0, 0, 0 },
+    { 36, 0, 0, 0 },
+    { 0, 0, 0, 0 },
+    { 0, 0, 0, 0 },
+    { 0, 0, 0, 0 },
+    { 36, 0, 0, 0 },
+    { 0, 0, 0, 0 },
+    { 0, 0, 0, 0 },
+    { 0, 0, 0, 0 },
+    { 36, 0, 0, 0 },
+    { 0, 0, 0, 0 },
+    { 0, 0, 0, 0 },
+    { 0, 0, 0, 0 },
+};
+
 static uint32_t seq_pos = 0;
-static uint8_t last_note = 0;
+static uint8_t last_notes[max_notes_per_step] = { 0, 0, 0, 0 };
 
 static uint32_t global_tempo = 120;
 static uint8_t global_velocity = 127;
@@ -49,6 +68,59 @@ static absolute_time_t last_screen_update_time;
 static absolute_time_t last_setting_int_time;
 
 static bool tempo_changed = false;
+
+bool in_sequence(uint8_t note, uint8_t pos)
+{
+    for (int j = 0; j < max_notes_per_step; j++) {
+        if (sequence[pos][j] == note)
+            return true;
+    }
+
+    return false;
+}
+
+bool is_step_clear(uint8_t pos)
+{
+    for (int j = 0; j < max_notes_per_step; j++) {
+        if (sequence[pos][j] != 0)
+            return false;
+    }
+
+    return true;
+}
+
+void clear_step(uint8_t pos)
+{
+    for (int j = 0; j < max_notes_per_step; j++) {
+        sequence[pos][j] = 0;
+    }
+}
+
+void clear_step_note(uint8_t note, uint8_t pos)
+{
+    for (int j = 0; j < max_notes_per_step; j++) {
+        if (sequence[pos][j] == note) {
+            sequence[pos][j] = 0;
+        }
+    }
+}
+
+void add_to_step(uint8_t note, uint8_t pos)
+{
+    //Don't add the note if it's already present in the step
+    if (in_sequence(note, pos))
+        return;
+
+    //Assign to first free slot
+    for (int j = 0; j < max_notes_per_step; j++) {
+        if (sequence[pos][j] == 0) {
+            sequence[pos][j] = note;
+            return;
+        }
+    }
+
+    //If there are no more free slots left - too bad! The note won't be added
+}
 
 int main()
 {
@@ -120,7 +192,7 @@ bool check_led_state(int led_id)
     bool led_state = false;
 
     // light up all notes when clear butoon is pressed
-    if (sequence[led_id] != 0 && gpio_get(CLEAR_BTN)) {
+    if (!is_step_clear(led_id) && gpio_get(CLEAR_BTN)) {
         return true;
     }
 
@@ -130,7 +202,7 @@ bool check_led_state(int led_id)
     // also light up steps with selected note
     // we want to blink the led when the sequence passes through selected step for
     // better visual feedback
-    if (sequence[led_id] == selected_note) {
+    if (in_sequence(selected_note, led_id)) {
         led_state = !is_on_position;
     }
 
@@ -139,11 +211,13 @@ bool check_led_state(int led_id)
 
 void step_buttons_scan()
 {
+    // scan twice to debounce
     bool button_states[] = { false, false, false, false, false, false,
         false, false, false, false, false, false,
         false, false, false, false };
     scan_inputs(button_states);
 
+    // detect input only if detected in both scans
     for (int i = 0; i < 16; i++) {
         if (button_states[i]) {
             pattern_button_pressed(i);
@@ -173,11 +247,15 @@ void pattern_button_pressed(uint8_t button)
 {
     // other modes(eg. sequence selection) can be handled here
     if (gpio_get(CLEAR_BTN)) {
-        sequence[button] = 0;
+        if (gpio_get(SETTING_BTN)) {
+            clear_step(button);
+        } else {
+            clear_step_note(selected_note, button);
+        }
     } else if (gpio_get(SETTING_BTN)) {
         selected_note = 36 + button;
     } else {
-        sequence[button] = selected_note;
+        add_to_step(selected_note, button);
     }
 }
 
@@ -197,7 +275,7 @@ bool note_timer_callback(struct repeating_timer* t)
 
     if (!gpio_get(HOLD_BTN)) {
         seq_pos++;
-        seq_pos %= sizeof(sequence);
+        seq_pos %= 16;
     }
 
     // blink every 4 steps
@@ -215,16 +293,22 @@ bool note_timer_callback(struct repeating_timer* t)
 
 void send_current_midi_note()
 {
-    if (last_note != 0) {
-        MIDI_usb_note_off(last_note);
-        MIDI_note_off(last_note);
+    for (auto note : last_notes) {
+        if (note != 0) {
+            MIDI_usb_note_off(note);
+            MIDI_note_off(note);
+        }
     }
 
-    uint8_t note = sequence[seq_pos];
-    if (note != 0) {
-        MIDI_usb_note_on(note, global_velocity);
-        MIDI_note_on(note, global_velocity);
-        last_note = note;
+    uint8_t* notes = sequence[seq_pos];
+
+    for (int i = 0; i < max_notes_per_step; i++) {
+        uint8_t note = notes[i];
+        if (note != 0) {
+            MIDI_usb_note_on(note, global_velocity);
+            MIDI_note_on(note, global_velocity);
+            last_notes[i] = note;
+        }
     }
 }
 
@@ -257,7 +341,7 @@ void start_stop_button_handler()
     if (gpio_get(CLEAR_BTN)) {
         // clear entire sequence
         for (int i = 0; i < 16; i++) {
-            sequence[i] = 0;
+            clear_step(i);
         }
     } else {
         if (playing_state == STOPPED)
@@ -281,9 +365,13 @@ void start()
 void stop()
 {
     playing_state = STOPPED;
-    MIDI_usb_note_off(last_note);
-    MIDI_note_off(last_note);
-    last_note = 0;
+    for (auto& note : last_notes) {
+        if (note != 0) {
+            MIDI_usb_note_off(note);
+            MIDI_note_off(note);
+            note = 0;
+        }
+    }
 }
 
 void test_button_handler()
@@ -311,7 +399,7 @@ void set_button_handler()
         return;
     }
 
-    sequence[seq_pos] = selected_note;
+    add_to_step(selected_note, seq_pos);
 
     last_set_int_time = get_absolute_time();
 }
