@@ -254,6 +254,8 @@ void pattern_button_pressed(uint8_t button)
         }
     } else if (gpio_get(SETTING_BTN)) {
         selected_note = 36 + button;
+    } else if (gpio_get(HOLD_BTN)) {
+        seq_pos = button;
     } else {
         add_to_step(selected_note, button);
     }
