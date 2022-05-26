@@ -38,9 +38,9 @@ void gpio_configure_pins()
     gpio_set_dir(SET_BTN, GPIO_IN);
     gpio_pull_down(SET_BTN);
 
-    gpio_init(TEST_BTN);
-    gpio_set_dir(TEST_BTN, GPIO_IN);
-    gpio_pull_down(TEST_BTN);
+    gpio_init(FUNC_BTN);
+    gpio_set_dir(FUNC_BTN, GPIO_IN);
+    gpio_pull_down(FUNC_BTN);
 
     gpio_init(START_STOP_BTN);
     gpio_set_dir(START_STOP_BTN, GPIO_IN);
@@ -69,7 +69,7 @@ void gpio_set_interrupts(void (*button_irq)(uint, uint32_t))
         button_irq);
 
     gpio_set_irq_enabled_with_callback(
-        TEST_BTN,
+        FUNC_BTN,
         GPIO_IRQ_EDGE_RISE,
         true,
         button_irq);

@@ -30,7 +30,7 @@
 //Control buttons
 #define START_STOP_BTN 15
 #define SET_BTN 22
-#define TEST_BTN 19
+#define FUNC_BTN 19
 #define CLEAR_BTN 18
 #define HOLD_BTN 17
 #define SETTING_BTN 16

@@ -1,5 +1,7 @@
 #include <algorithm>
+#include <array>
 #include <cstdio>
+#include <cstring>
 #include <pico/stdlib.h>
 
 #include "hardware/gpio.h"
@@ -17,29 +19,192 @@ static repeating_timer_t note_timer;
 static repeating_timer_t display_timer;
 
 const uint8_t max_notes_per_step = 8;
+const int max_parts = 4;
+const int step_count = 16;
 
-static uint8_t sequence[16][max_notes_per_step] = {
-    { 36, 0, 0, 0 },
-    { 0, 0, 0, 0 },
-    { 0, 0, 0, 0 },
-    { 0, 0, 0, 0 },
-    { 36, 0, 0, 0 },
-    { 0, 0, 0, 0 },
-    { 0, 0, 0, 0 },
-    { 0, 0, 0, 0 },
-    { 36, 0, 0, 0 },
-    { 0, 0, 0, 0 },
-    { 0, 0, 0, 0 },
-    { 0, 0, 0, 0 },
-    { 36, 0, 0, 0 },
-    { 0, 0, 0, 0 },
-    { 0, 0, 0, 0 },
-    { 0, 0, 0, 0 },
+using Part = std::array<std::array<uint8_t, max_notes_per_step>, step_count>;
+
+struct Sequence {
+    std::array<Part, max_parts> parts {};
+    std::array<uint8_t, max_notes_per_step> last_notes {};
+
+    bool part_change_scheduled = false;
+    int next_part = 0;
+
+    int current_part = 0;
+    int selected_part = 0;
+    int active_parts_count = 4;
+    int pos = 0;
+
+    Sequence()
+    {
+        for (auto& part : parts) {
+            part = { {
+                { 0, 0, 0, 0 },
+                { 0, 0, 0, 0 },
+                { 0, 0, 0, 0 },
+                { 0, 0, 0, 0 },
+                { 0, 0, 0, 0 },
+                { 0, 0, 0, 0 },
+                { 0, 0, 0, 0 },
+                { 0, 0, 0, 0 },
+                { 0, 0, 0, 0 },
+                { 0, 0, 0, 0 },
+                { 0, 0, 0, 0 },
+                { 0, 0, 0, 0 },
+                { 0, 0, 0, 0 },
+                { 0, 0, 0, 0 },
+                { 0, 0, 0, 0 },
+                { 0, 0, 0, 0 },
+            } };
+        }
+    }
+
+    void tick(bool advanceParts)
+    {
+        pos++;
+        pos %= step_count;
+        if (part_change_scheduled && pos == 0) {
+            current_part = next_part;
+            part_change_scheduled = 0;
+            next_part = 0;
+        }
+        // if (advanceParts && pos == 0) {
+        //     current_part++;
+        //     current_part %= active_parts_count;
+        // }
+    }
+
+    void reset()
+    {
+        pos = 0;
+        current_part = 0;
+        part_change_scheduled = false;
+        next_part = 0;
+    }
+
+    void set_part(int part)
+    {
+        if (current_part == part) {
+            return;
+        }
+
+        //When we already scheduled a part change, pressing the button again should change part immediately
+        if (next_part == part) {
+            current_part = next_part;
+            next_part = 0;
+            part_change_scheduled = false;
+        } else {
+            if (part < 0 || part >= max_parts) {
+                return;
+            }
+            next_part = part;
+            part_change_scheduled = true;
+        }
+    }
+
+    void copy_to(int part){
+        if (part < 0 || part >= max_parts) {
+                return;
+        }
+
+        auto current_part = get_current_part();
+
+        parts[part] = current_part;
+    }
+
+    void clear_all()
+    {
+        for (auto& part : parts) {
+            for (auto& step : part) {
+                for (auto& note : step) {
+                    note = 0;
+                }
+            }
+        }
+    }
+
+    void clear_current_part()
+    {
+        auto& part = get_current_part();
+        for (auto& step : part) {
+            for (auto& note : step) {
+                note = 0;
+            }
+        }
+    }
+
+    Part& get_current_part()
+    {
+        return parts[current_part];
+    }
+
+    std::array<uint8_t, max_notes_per_step> current_step()
+    {
+        return parts[current_part][pos];
+    }
+
+    bool in_step(uint8_t note, uint8_t pos)
+    {
+        for (int j = 0; j < max_notes_per_step; j++) {
+            if (get_current_part()[pos][j] == note) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    bool is_step_clear(uint8_t pos)
+    {
+        for (int j = 0; j < max_notes_per_step; j++) {
+            if (get_current_part()[pos][j] != 0)
+                return false;
+        }
+
+        return true;
+    }
+
+    void clear_step(uint8_t pos)
+    {
+        auto& step = get_current_part()[pos];
+        for (int j = 0; j < max_notes_per_step; j++) {
+            step[j] = 0;
+        }
+    }
+
+    void clear_step_note(uint8_t note, uint8_t pos)
+    {
+        auto& step = get_current_part()[pos];
+        for (int j = 0; j < max_notes_per_step; j++) {
+            if (step[j] == note) {
+                step[j] = 0;
+            }
+        }
+    }
+
+    void add_to_step(uint8_t note, uint8_t pos)
+    {
+        //Don't add the note if it's already present in the step
+        if (in_step(note, pos)) {
+            return;
+        }
+
+        auto& step = get_current_part()[pos];
+
+        //Assign to first free slot
+        for (int j = 0; j < max_notes_per_step; j++) {
+            if (step[j] == 0) {
+                step[j] = note;
+                return;
+            }
+        }
+
+        //If there are no more free slots left - too bad! The note won't be added
+    }
 };
 
-static uint32_t seq_pos = 0;
-static uint8_t last_notes[max_notes_per_step] = { 0, 0, 0, 0 };
-
+static Sequence sequence;
 static uint32_t global_tempo = 120;
 static uint8_t global_velocity = 127;
 static uint8_t selected_note = 36;
@@ -68,59 +233,6 @@ static absolute_time_t last_screen_update_time;
 static absolute_time_t last_setting_int_time;
 
 static bool tempo_changed = false;
-
-bool in_sequence(uint8_t note, uint8_t pos)
-{
-    for (int j = 0; j < max_notes_per_step; j++) {
-        if (sequence[pos][j] == note)
-            return true;
-    }
-
-    return false;
-}
-
-bool is_step_clear(uint8_t pos)
-{
-    for (int j = 0; j < max_notes_per_step; j++) {
-        if (sequence[pos][j] != 0)
-            return false;
-    }
-
-    return true;
-}
-
-void clear_step(uint8_t pos)
-{
-    for (int j = 0; j < max_notes_per_step; j++) {
-        sequence[pos][j] = 0;
-    }
-}
-
-void clear_step_note(uint8_t note, uint8_t pos)
-{
-    for (int j = 0; j < max_notes_per_step; j++) {
-        if (sequence[pos][j] == note) {
-            sequence[pos][j] = 0;
-        }
-    }
-}
-
-void add_to_step(uint8_t note, uint8_t pos)
-{
-    //Don't add the note if it's already present in the step
-    if (in_sequence(note, pos))
-        return;
-
-    //Assign to first free slot
-    for (int j = 0; j < max_notes_per_step; j++) {
-        if (sequence[pos][j] == 0) {
-            sequence[pos][j] = note;
-            return;
-        }
-    }
-
-    //If there are no more free slots left - too bad! The note won't be added
-}
 
 int main()
 {
@@ -173,7 +285,7 @@ void timers_init()
 
 void seq_leds()
 {
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < step_count; i++) {
         bool led_state = check_led_state(i);
 
         gpio_put(SHIFT_DATA, led_state);
@@ -188,11 +300,11 @@ void seq_leds()
 bool check_led_state(int led_id)
 {
     // light up current step during playing
-    bool is_on_position = (playing_state == PLAYING && led_id == seq_pos);
+    bool is_on_position = (playing_state == PLAYING && led_id == sequence.pos);
     bool led_state = false;
 
     // light up all notes when clear butoon is pressed
-    if (!is_step_clear(led_id) && gpio_get(CLEAR_BTN)) {
+    if (!sequence.is_step_clear(led_id) && gpio_get(CLEAR_BTN)) {
         return true;
     }
 
@@ -202,7 +314,7 @@ bool check_led_state(int led_id)
     // also light up steps with selected note
     // we want to blink the led when the sequence passes through selected step for
     // better visual feedback
-    if (in_sequence(selected_note, led_id)) {
+    if (sequence.in_step(selected_note, led_id)) {
         led_state = !is_on_position;
     }
 
@@ -248,16 +360,22 @@ void pattern_button_pressed(uint8_t button)
     // other modes(eg. sequence selection) can be handled here
     if (gpio_get(CLEAR_BTN)) {
         if (gpio_get(SETTING_BTN)) {
-            clear_step(button);
+            sequence.clear_step(button);
         } else {
-            clear_step_note(selected_note, button);
+            sequence.clear_step_note(selected_note, button);
+        }
+    } else if (gpio_get(FUNC_BTN)) {
+        if (gpio_get(SETTING_BTN)) {
+            sequence.copy_to(button);
+        } else {
+            sequence.set_part(button);
         }
     } else if (gpio_get(SETTING_BTN)) {
         selected_note = 36 + button;
     } else if (gpio_get(HOLD_BTN)) {
-        seq_pos = button;
+        sequence.pos = button;
     } else {
-        add_to_step(selected_note, button);
+        sequence.add_to_step(selected_note, button);
     }
 }
 
@@ -276,12 +394,11 @@ bool note_timer_callback(struct repeating_timer* t)
     }
 
     if (!gpio_get(HOLD_BTN)) {
-        seq_pos++;
-        seq_pos %= 16;
+        sequence.tick(false);
     }
 
     // blink every 4 steps
-    gpio_put(TEMPO_LED, (seq_pos % 4 == 0));
+    gpio_put(TEMPO_LED, (sequence.pos % 4 == 0));
 
     if (tempo_changed) {
         tempo_changed = false;
@@ -295,21 +412,21 @@ bool note_timer_callback(struct repeating_timer* t)
 
 void send_current_midi_note()
 {
-    for (auto note : last_notes) {
+    for (auto note : sequence.last_notes) {
         if (note != 0) {
             MIDI_usb_note_off(note);
             MIDI_note_off(note);
         }
     }
 
-    uint8_t* notes = sequence[seq_pos];
+    auto notes = sequence.current_step();
 
     for (int i = 0; i < max_notes_per_step; i++) {
         uint8_t note = notes[i];
         if (note != 0) {
             MIDI_usb_note_on(note, global_velocity);
             MIDI_note_on(note, global_velocity);
-            last_notes[i] = note;
+            sequence.last_notes[i] = note;
         }
     }
 }
@@ -323,14 +440,14 @@ void button_irq(uint gpio, uint32_t events)
     case START_STOP_BTN:
         start_stop_button_handler();
         break;
-    case TEST_BTN:
-        test_button_handler();
-        break;
     case SET_BTN:
         set_button_handler();
         break;
     case SETTING_BTN:
         setting_button_handler();
+        break;
+    default:
+        break;
     }
 }
 
@@ -341,10 +458,7 @@ void start_stop_button_handler()
     }
 
     if (gpio_get(CLEAR_BTN)) {
-        // clear entire sequence
-        for (int i = 0; i < 16; i++) {
-            clear_step(i);
-        }
+        sequence.clear_all();
     } else {
         if (playing_state == STOPPED)
             start();
@@ -358,7 +472,7 @@ void start_stop_button_handler()
 void start()
 {
     cancel_repeating_timer(&note_timer);
-    seq_pos = 0;
+    sequence.reset();
     playing_state = PLAYING;
     add_repeating_timer_ms(bpm_to_delay(global_tempo), note_timer_callback, NULL,
         &note_timer);
@@ -367,7 +481,7 @@ void start()
 void stop()
 {
     playing_state = STOPPED;
-    for (auto& note : last_notes) {
+    for (auto& note : sequence.last_notes) {
         if (note != 0) {
             MIDI_usb_note_off(note);
             MIDI_note_off(note);
@@ -376,7 +490,7 @@ void stop()
     }
 }
 
-void test_button_handler()
+void send_single()
 {
 
     if (absolute_time_diff_us(last_test_int_time, get_absolute_time()) < 125000) {
@@ -401,7 +515,11 @@ void set_button_handler()
         return;
     }
 
-    add_to_step(selected_note, seq_pos);
+    if (gpio_get(FUNC_BTN)) {
+        send_single();
+    } else {
+        sequence.add_to_step(selected_note, sequence.pos);
+    }
 
     last_set_int_time = get_absolute_time();
 }
@@ -491,9 +609,11 @@ void update_display()
 
 int format_first_line(char* buffer, int buflen)
 {
-    int n = snprintf(buffer, buflen, "%c%3s(%3d)%cT:%d",
+    const char* note_name = notes[selected_note];
+    int n = snprintf(buffer, buflen, "P:%d %c%3s%cT:%d",
+        sequence.current_part + 1,
         settings[current_setting] == NOTE ? '>' : ' ',
-        notes[selected_note], selected_note,
+        notes[selected_note],
         settings[current_setting] == TEMPO ? '>' : ' ', global_tempo);
 
     return n;

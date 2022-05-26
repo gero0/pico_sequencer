@@ -22,7 +22,7 @@ void send_current_midi_note();
 bool note_timer_callback(struct repeating_timer* t);
 void button_irq(uint gpio, uint32_t events);
 
-void test_button_handler();
+void send_single();
 void start_stop_button_handler();
 void set_button_handler();
 void encoder_handler();
