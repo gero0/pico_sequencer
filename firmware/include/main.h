@@ -2,6 +2,10 @@
 #define __MAIN_DECLARATIONS__
 
 #include <pico/stdlib.h>
+#include <array>
+
+const int step_button_count = 16;
+const int MIDI_BAUDRATE = 31250;
 
 int bpm_to_delay(int bpm);
 void initialize();
@@ -12,7 +16,7 @@ void seq_leds();
 void display();
 void set_interrupts();
 void step_buttons_scan();
-void scan_inputs(bool* button_states);
+void scan_inputs(std::array<bool, step_button_count>& button_states);
 void pattern_button_pressed(uint8_t button);
 
 void stop();

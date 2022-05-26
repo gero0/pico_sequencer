@@ -13,199 +13,13 @@
 #include "main.h"
 #include "midi.h"
 #include "pins.h"
+#include "sequence.h"
 #include "string_consts.h"
 
 static repeating_timer_t note_timer;
 static repeating_timer_t display_timer;
-
-const uint8_t max_notes_per_step = 8;
-const int max_parts = 4;
-const int step_count = 16;
-
-using Part = std::array<std::array<uint8_t, max_notes_per_step>, step_count>;
-
-struct Sequence {
-    std::array<Part, max_parts> parts {};
-    std::array<uint8_t, max_notes_per_step> last_notes {};
-
-    bool part_change_scheduled = false;
-    int next_part = 0;
-
-    int current_part = 0;
-    int selected_part = 0;
-    int active_parts_count = 4;
-    int pos = 0;
-
-    Sequence()
-    {
-        for (auto& part : parts) {
-            part = { {
-                { 0, 0, 0, 0 },
-                { 0, 0, 0, 0 },
-                { 0, 0, 0, 0 },
-                { 0, 0, 0, 0 },
-                { 0, 0, 0, 0 },
-                { 0, 0, 0, 0 },
-                { 0, 0, 0, 0 },
-                { 0, 0, 0, 0 },
-                { 0, 0, 0, 0 },
-                { 0, 0, 0, 0 },
-                { 0, 0, 0, 0 },
-                { 0, 0, 0, 0 },
-                { 0, 0, 0, 0 },
-                { 0, 0, 0, 0 },
-                { 0, 0, 0, 0 },
-                { 0, 0, 0, 0 },
-            } };
-        }
-    }
-
-    void tick(bool advanceParts)
-    {
-        pos++;
-        pos %= step_count;
-        if (part_change_scheduled && pos == 0) {
-            current_part = next_part;
-            part_change_scheduled = 0;
-            next_part = 0;
-        }
-        // if (advanceParts && pos == 0) {
-        //     current_part++;
-        //     current_part %= active_parts_count;
-        // }
-    }
-
-    void reset()
-    {
-        pos = 0;
-        current_part = 0;
-        part_change_scheduled = false;
-        next_part = 0;
-    }
-
-    void set_part(int part)
-    {
-        if (current_part == part) {
-            return;
-        }
-
-        //When we already scheduled a part change, pressing the button again should change part immediately
-        if (next_part == part) {
-            current_part = next_part;
-            next_part = 0;
-            part_change_scheduled = false;
-        } else {
-            if (part < 0 || part >= max_parts) {
-                return;
-            }
-            next_part = part;
-            part_change_scheduled = true;
-        }
-    }
-
-    void copy_to(int part){
-        if (part < 0 || part >= max_parts) {
-                return;
-        }
-
-        auto current_part = get_current_part();
-
-        parts[part] = current_part;
-    }
-
-    void clear_all()
-    {
-        for (auto& part : parts) {
-            for (auto& step : part) {
-                for (auto& note : step) {
-                    note = 0;
-                }
-            }
-        }
-    }
-
-    void clear_current_part()
-    {
-        auto& part = get_current_part();
-        for (auto& step : part) {
-            for (auto& note : step) {
-                note = 0;
-            }
-        }
-    }
-
-    Part& get_current_part()
-    {
-        return parts[current_part];
-    }
-
-    std::array<uint8_t, max_notes_per_step> current_step()
-    {
-        return parts[current_part][pos];
-    }
-
-    bool in_step(uint8_t note, uint8_t pos)
-    {
-        for (int j = 0; j < max_notes_per_step; j++) {
-            if (get_current_part()[pos][j] == note) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    bool is_step_clear(uint8_t pos)
-    {
-        for (int j = 0; j < max_notes_per_step; j++) {
-            if (get_current_part()[pos][j] != 0)
-                return false;
-        }
-
-        return true;
-    }
-
-    void clear_step(uint8_t pos)
-    {
-        auto& step = get_current_part()[pos];
-        for (int j = 0; j < max_notes_per_step; j++) {
-            step[j] = 0;
-        }
-    }
-
-    void clear_step_note(uint8_t note, uint8_t pos)
-    {
-        auto& step = get_current_part()[pos];
-        for (int j = 0; j < max_notes_per_step; j++) {
-            if (step[j] == note) {
-                step[j] = 0;
-            }
-        }
-    }
-
-    void add_to_step(uint8_t note, uint8_t pos)
-    {
-        //Don't add the note if it's already present in the step
-        if (in_step(note, pos)) {
-            return;
-        }
-
-        auto& step = get_current_part()[pos];
-
-        //Assign to first free slot
-        for (int j = 0; j < max_notes_per_step; j++) {
-            if (step[j] == 0) {
-                step[j] = note;
-                return;
-            }
-        }
-
-        //If there are no more free slots left - too bad! The note won't be added
-    }
-};
-
 static Sequence sequence;
-static uint32_t global_tempo = 120;
+static uint8_t global_tempo = 120;
 static uint8_t global_velocity = 127;
 static uint8_t selected_note = 36;
 
@@ -253,7 +67,7 @@ int main()
 
 void setup_midi_uart()
 {
-    uart_init(uart0, 31250);
+    uart_init(uart0, MIDI_BAUDRATE);
     gpio_set_function(MIDI_TX, GPIO_FUNC_UART);
     gpio_set_function(MIDI_RX, GPIO_FUNC_UART);
 }
@@ -279,7 +93,7 @@ void timers_init()
     last_setting_int_time = get_absolute_time();
     last_screen_update_time = get_absolute_time();
 
-    add_repeating_timer_ms(bpm_to_delay(global_tempo), note_timer_callback, NULL,
+    add_repeating_timer_ms(bpm_to_delay(global_tempo), note_timer_callback, nullptr,
         &note_timer);
 }
 
@@ -289,12 +103,12 @@ void seq_leds()
         bool led_state = check_led_state(i);
 
         gpio_put(SHIFT_DATA, led_state);
-        gpio_put(CLOCK, 1);
-        gpio_put(CLOCK, 0);
+        gpio_put(CLOCK, true);
+        gpio_put(CLOCK, false);
     }
 
-    gpio_put(LATCH, 1);
-    gpio_put(LATCH, 0);
+    gpio_put(LATCH, true);
+    gpio_put(LATCH, false);
 }
 
 bool check_led_state(int led_id)
@@ -308,8 +122,9 @@ bool check_led_state(int led_id)
         return true;
     }
 
-    if (is_on_position)
+    if (is_on_position) {
         led_state = true;
+    }
 
     // also light up steps with selected note
     // we want to blink the led when the sequence passes through selected step for
@@ -324,30 +139,30 @@ bool check_led_state(int led_id)
 void step_buttons_scan()
 {
     // scan twice to debounce
-    bool button_states[] = { false, false, false, false, false, false,
+    std::array<bool, step_button_count> button_states = { false, false, false, false, false, false,
         false, false, false, false, false, false,
         false, false, false, false };
     scan_inputs(button_states);
 
     // detect input only if detected in both scans
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < step_button_count; i++) {
         if (button_states[i]) {
             pattern_button_pressed(i);
         }
     }
 }
 
-void scan_inputs(bool button_states[])
+void scan_inputs(std::array<bool, step_button_count>& button_states)
 {
     // latch and clock connected
-    gpio_put(COL_DATA, 1);
-    gpio_put(COL_CLOCK, 1);
-    gpio_put(COL_CLOCK, 0);
+    gpio_put(COL_DATA, true);
+    gpio_put(COL_CLOCK, true);
+    gpio_put(COL_CLOCK, false);
 
-    for (int i = 0; i < 16; i++) {
-        gpio_put(COL_DATA, 0);
-        gpio_put(COL_CLOCK, 1);
-        gpio_put(COL_CLOCK, 0);
+    for (int i = 0; i < step_button_count; i++) {
+        gpio_put(COL_DATA, false);
+        gpio_put(COL_CLOCK, true);
+        gpio_put(COL_CLOCK, false);
 
         sleep_us(10);
 
@@ -384,10 +199,10 @@ int bpm_to_delay(int bpm)
     float seconds_per_beat = 60.0 / bpm;
     float seconds_per_sixteenth = seconds_per_beat / 4;
     float ms_per_sixteenth = seconds_per_sixteenth * 1000;
-    return (int)ms_per_sixteenth;
+    return static_cast<int>(ms_per_sixteenth);
 }
 
-bool note_timer_callback(struct repeating_timer* t)
+bool note_timer_callback(struct repeating_timer* /*t*/)
 {
     if (playing_state == PLAYING) {
         send_current_midi_note();
@@ -403,7 +218,7 @@ bool note_timer_callback(struct repeating_timer* t)
     if (tempo_changed) {
         tempo_changed = false;
         cancel_repeating_timer(&note_timer);
-        add_repeating_timer_ms(bpm_to_delay(global_tempo), note_timer_callback, NULL,
+        add_repeating_timer_ms(bpm_to_delay(global_tempo), note_timer_callback, nullptr,
             &note_timer);
     }
 
@@ -431,7 +246,7 @@ void send_current_midi_note()
     }
 }
 
-void button_irq(uint gpio, uint32_t events)
+void button_irq(uint gpio, uint32_t /*events*/)
 {
     switch (gpio) {
     case ENC_1:
@@ -460,10 +275,11 @@ void start_stop_button_handler()
     if (gpio_get(CLEAR_BTN)) {
         sequence.clear_all();
     } else {
-        if (playing_state == STOPPED)
+        if (playing_state == STOPPED) {
             start();
-        else
+        } else {
             stop();
+        }
     }
 
     last_startstop_int_time = get_absolute_time();
@@ -474,7 +290,7 @@ void start()
     cancel_repeating_timer(&note_timer);
     sequence.reset();
     playing_state = PLAYING;
-    add_repeating_timer_ms(bpm_to_delay(global_tempo), note_timer_callback, NULL,
+    add_repeating_timer_ms(bpm_to_delay(global_tempo), note_timer_callback, nullptr,
         &note_timer);
 }
 
@@ -492,7 +308,6 @@ void stop()
 
 void send_single()
 {
-
     if (absolute_time_diff_us(last_test_int_time, get_absolute_time()) < 125000) {
         return;
     }
@@ -561,8 +376,9 @@ void encoder_handler()
 void change_note(bool increment)
 {
     if (increment) {
-        if (selected_note > 1)
+        if (selected_note > 1) {
             selected_note--;
+        }
     } else {
         if (selected_note < 127) {
             selected_note++;
@@ -573,8 +389,9 @@ void change_note(bool increment)
 void change_velocity(bool increment)
 {
     if (increment) {
-        if (global_velocity > 0)
+        if (global_velocity > 0) {
             global_velocity--;
+        }
     } else {
         if (global_velocity < 127) {
             global_velocity++;
@@ -585,8 +402,9 @@ void change_velocity(bool increment)
 void change_tempo(bool increment)
 {
     if (increment) {
-        if (global_tempo > 1)
+        if (global_tempo > 1) {
             global_tempo--;
+        }
     } else {
         if (global_tempo < 255) {
             global_tempo++;
@@ -598,8 +416,8 @@ void change_tempo(bool increment)
 
 void update_display()
 {
-    char first_line_buffer[16];
-    char second_line_buffer[16];
+    char first_line_buffer[LCD_ROW_LENGTH];
+    char second_line_buffer[LCD_ROW_LENGTH];
 
     int n = format_first_line(first_line_buffer, sizeof(first_line_buffer));
     int n2 = format_second_line(second_line_buffer, sizeof(second_line_buffer));
@@ -607,7 +425,7 @@ void update_display()
     write_to_display(first_line_buffer, n, second_line_buffer, n2);
 }
 
-int format_first_line(char* buffer, int buflen)
+int format_first_line(char buffer[], int buflen)
 {
     const char* note_name = notes[selected_note];
     int n = snprintf(buffer, buflen, "P:%d %c%3s%cT:%d",
@@ -619,7 +437,7 @@ int format_first_line(char* buffer, int buflen)
     return n;
 }
 
-int format_second_line(char* buffer, int buflen)
+int format_second_line(char buffer[], int buflen)
 {
     const char* instrument = instrument_mapping[selected_note];
 
@@ -630,16 +448,16 @@ int format_second_line(char* buffer, int buflen)
     return n;
 }
 
-void write_to_display(char* first_line, int n1, char* second_line, int n2)
+void write_to_display(char first_line[], int n1, char second_line[], int n2)
 {
     LCD_clear();
     sleep_ms(2);
     LCD_position(1, 1);
     sleep_ms(1);
-    LCD_write_text(first_line, std::min(16, n1));
+    LCD_write_text(first_line, std::min(LCD_ROW_LENGTH, n1));
     sleep_ms(1);
     LCD_position(2, 1);
     sleep_ms(1);
-    LCD_write_text(second_line, std::min(16, n2));
+    LCD_write_text(second_line, std::min(LCD_ROW_LENGTH, n2));
     sleep_ms(1);
 }
