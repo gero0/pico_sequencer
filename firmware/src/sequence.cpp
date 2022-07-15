@@ -31,7 +31,7 @@ void Sequence::tick(bool /*advanceParts*/)
     if (part_change_scheduled && pos == 0) {
         current_part = next_part;
         part_change_scheduled = false;
-        next_part = 0;
+        next_part = -1;
     }
     // if (advanceParts && pos == 0) {
     //     current_part++;
@@ -44,7 +44,7 @@ void Sequence::reset()
     pos = 0;
     current_part = 0;
     part_change_scheduled = false;
-    next_part = 0;
+    next_part = -1;
 }
 
 void Sequence::set_part(int part)
@@ -56,7 +56,6 @@ void Sequence::set_part(int part)
     //When we already scheduled a part change, pressing the button again should change part immediately
     if (next_part == part) {
         current_part = next_part;
-        next_part = 0;
         part_change_scheduled = false;
     } else {
         if (part < 0 || part >= max_parts) {
