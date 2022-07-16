@@ -13,22 +13,11 @@
 #include "main.h"
 #include "midi.h"
 #include "pins.h"
-#include "sequence.h"
 #include "string_consts.h"
 
-static repeating_timer_t note_timer;
+#include <player.h>
+
 static repeating_timer_t display_timer;
-static Sequence sequence;
-static uint8_t global_tempo = 120;
-static uint8_t global_velocity = 127;
-static uint8_t selected_note = 36;
-
-enum PlayingState {
-    STOPPED,
-    PLAYING,
-};
-
-static enum PlayingState playing_state = STOPPED;
 
 enum Setting {
     NOTE,
@@ -38,6 +27,7 @@ enum Setting {
 
 static enum Setting settings[] = { NOTE, TEMPO, GL_VELOCITY };
 static uint8_t current_setting = 0;
+uint8_t selected_note = 36;
 
 static absolute_time_t last_startstop_int_time;
 static absolute_time_t last_test_int_time;
@@ -46,11 +36,10 @@ static absolute_time_t last_enc_int_time;
 static absolute_time_t last_screen_update_time;
 static absolute_time_t last_setting_int_time;
 
-static bool tempo_changed = false;
-
 int main()
 {
     initialize();
+    Player::Instance()->init_timer();
 
     while (true) {
         tud_task(); // tinyusb device task
@@ -92,9 +81,6 @@ void timers_init()
     last_enc_int_time = get_absolute_time();
     last_setting_int_time = get_absolute_time();
     last_screen_update_time = get_absolute_time();
-
-    add_repeating_timer_ms(bpm_to_delay(global_tempo), note_timer_callback, nullptr,
-        &note_timer);
 }
 
 void seq_leds()
@@ -113,8 +99,11 @@ void seq_leds()
 
 bool check_led_state(int led_id)
 {
+    auto playing_state = Player::Instance()->get_state();
+    auto& sequence = Player::Instance()->get_sequence();
+
     // light up current step during playing
-    bool is_on_position = (playing_state == PLAYING && led_id == sequence.pos);
+    bool is_on_position = (playing_state == PlayerState::PLAYING && led_id == sequence.pos);
     bool led_state = false;
 
     // light up all notes when clear butoon is pressed
@@ -172,6 +161,8 @@ void scan_inputs(std::array<bool, step_button_count>& button_states)
 
 void pattern_button_pressed(uint8_t button)
 {
+    auto& sequence = Player::Instance()->get_sequence();
+
     // other modes(eg. sequence selection) can be handled here
     if (gpio_get(CLEAR_BTN)) {
         if (gpio_get(SETTING_BTN)) {
@@ -191,58 +182,6 @@ void pattern_button_pressed(uint8_t button)
         sequence.pos = button;
     } else {
         sequence.add_to_step(selected_note, button);
-    }
-}
-
-int bpm_to_delay(int bpm)
-{
-    float seconds_per_beat = 60.0 / bpm;
-    float seconds_per_sixteenth = seconds_per_beat / 4;
-    float ms_per_sixteenth = seconds_per_sixteenth * 1000;
-    return static_cast<int>(ms_per_sixteenth);
-}
-
-bool note_timer_callback(struct repeating_timer* /*t*/)
-{
-    if (playing_state == PLAYING) {
-        send_current_midi_note();
-    }
-
-    if (!gpio_get(HOLD_BTN)) {
-        sequence.tick(false);
-    }
-
-    // blink every 4 steps
-    gpio_put(TEMPO_LED, (sequence.pos % 4 == 0));
-
-    if (tempo_changed) {
-        tempo_changed = false;
-        cancel_repeating_timer(&note_timer);
-        add_repeating_timer_ms(bpm_to_delay(global_tempo), note_timer_callback, nullptr,
-            &note_timer);
-    }
-
-    return true;
-}
-
-void send_current_midi_note()
-{
-    for (auto note : sequence.last_notes) {
-        if (note != 0) {
-            MIDI_usb_note_off(note);
-            MIDI_note_off(note);
-        }
-    }
-
-    auto notes = sequence.current_step();
-
-    for (int i = 0; i < max_notes_per_step; i++) {
-        uint8_t note = notes[i];
-        if (note != 0) {
-            MIDI_usb_note_on(note, global_velocity);
-            MIDI_note_on(note, global_velocity);
-            sequence.last_notes[i] = note;
-        }
     }
 }
 
@@ -272,38 +211,16 @@ void start_stop_button_handler()
         return;
     }
 
+    auto playing_state = Player::Instance()->get_state();
+    auto& sequence = Player::Instance()->get_sequence();
+
     if (gpio_get(CLEAR_BTN)) {
         sequence.clear_all();
     } else {
-        if (playing_state == STOPPED) {
-            start();
-        } else {
-            stop();
-        }
+        Player::Instance()->start_stop();
     }
 
     last_startstop_int_time = get_absolute_time();
-}
-
-void start()
-{
-    cancel_repeating_timer(&note_timer);
-    sequence.reset();
-    playing_state = PLAYING;
-    add_repeating_timer_ms(bpm_to_delay(global_tempo), note_timer_callback, nullptr,
-        &note_timer);
-}
-
-void stop()
-{
-    playing_state = STOPPED;
-    for (auto& note : sequence.last_notes) {
-        if (note != 0) {
-            MIDI_usb_note_off(note);
-            MIDI_note_off(note);
-            note = 0;
-        }
-    }
 }
 
 void send_single()
@@ -312,10 +229,7 @@ void send_single()
         return;
     }
 
-    MIDI_usb_note_on(selected_note, global_velocity);
-    MIDI_note_on(selected_note, global_velocity);
-    MIDI_usb_note_off(selected_note);
-    MIDI_note_off(selected_note);
+    Player::Instance()->send_single(selected_note);
 
     last_test_int_time = get_absolute_time();
 }
@@ -326,7 +240,10 @@ void set_button_handler()
         return;
     }
 
-    if (playing_state != PLAYING) {
+    auto playing_state = Player::Instance()->get_state();
+    auto& sequence = Player::Instance()->get_sequence();
+
+    if (playing_state != PlayerState::PLAYING) {
         return;
     }
 
@@ -373,45 +290,37 @@ void encoder_handler()
     last_enc_int_time = get_absolute_time();
 }
 
-void change_note(bool increment)
+template <typename T>
+T change_checked(T val, T lower_bound, T upper_bound, bool increment)
 {
     if (increment) {
-        if (selected_note > 1) {
-            selected_note--;
+        if (val < upper_bound) {
+            val++;
         }
     } else {
-        if (selected_note < 127) {
-            selected_note++;
+        if (val > lower_bound) {
+            val--;
         }
     }
+
+    return val;
+}
+
+void change_note(bool increment)
+{
+    selected_note = change_checked<uint8_t>(selected_note, 1, 127, increment);
 }
 
 void change_velocity(bool increment)
 {
-    if (increment) {
-        if (global_velocity > 0) {
-            global_velocity--;
-        }
-    } else {
-        if (global_velocity < 127) {
-            global_velocity++;
-        }
-    }
+    auto v = change_checked<uint8_t>(Player::Instance()->get_global_velocity(), 0, 127, increment);
+    Player::Instance()->set_global_velocity(v);
 }
 
 void change_tempo(bool increment)
 {
-    if (increment) {
-        if (global_tempo > 1) {
-            global_tempo--;
-        }
-    } else {
-        if (global_tempo < 255) {
-            global_tempo++;
-        }
-    }
-
-    tempo_changed = true;
+    auto t = change_checked<uint8_t>(Player::Instance()->get_tempo(), 1, 255, increment);
+    Player::Instance()->set_tempo(t);
 }
 
 void update_display()
@@ -427,18 +336,23 @@ void update_display()
 
 int format_first_line(char buffer[], int buflen)
 {
+    auto& sequence = Player::Instance()->get_sequence();
+    auto tempo = Player::Instance()->get_tempo();
+
     const char* note_name = notes[selected_note];
     int n = snprintf(buffer, buflen, "P:%d %c%3s%cT:%d",
         sequence.current_part + 1,
         settings[current_setting] == NOTE ? '>' : ' ',
         notes[selected_note],
-        settings[current_setting] == TEMPO ? '>' : ' ', global_tempo);
+        settings[current_setting] == TEMPO ? '>' : ' ', tempo);
 
     return n;
 }
 
 int format_second_line(char buffer[], int buflen)
 {
+    auto global_velocity = Player::Instance()->get_global_velocity();
+
     const char* instrument = instrument_mapping[selected_note];
 
     int n = snprintf(buffer, buflen, "%9s%cV:%3d", instrument,
