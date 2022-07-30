@@ -24,6 +24,32 @@ Sequence::Sequence()
     }
 }
 
+void Sequence::serialize(SequenceBuffer& buffer)
+{
+    int i = 0;
+    for (auto part : parts) {
+        for (auto step : part) {
+            for (auto note : step) {
+                buffer[i] = note;
+                i++;
+            }
+        }
+    }
+}
+
+void Sequence::deserialize(const SequenceBuffer& buffer)
+{
+    int i = 0;
+    for (auto& part : parts) {
+        for (auto& step : part) {
+            for (auto& note : step) {
+                note = buffer[i];
+                i++;
+            }
+        }
+    }
+}
+
 void Sequence::tick(bool /*advanceParts*/)
 {
     pos++;

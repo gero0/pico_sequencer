@@ -21,6 +21,7 @@ file(GLOB test_src_files CONFIGURE_DEPENDS
  "${CMAKE_SOURCE_DIR}/mock/*.cpp" 
  "${CMAKE_SOURCE_DIR}/mock/hardware/*.cpp" 
  "${CMAKE_SOURCE_DIR}/../firmware/src/midi.cpp"
+ "${CMAKE_SOURCE_DIR}/../firmware/src/sequence.cpp"
 )
 
 add_executable(run_tests "${test_src_files}")
