@@ -1,3 +1,5 @@
+#ifndef __PLAYER__
+#define __PLAYER__
 
 #include "pico/time.h"
 #include "sequence.h"
@@ -48,3 +50,5 @@ private:
 
     void send_current_midi_note();
 };
+
+#endif

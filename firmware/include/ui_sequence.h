@@ -1,6 +1,7 @@
 #ifndef __UI_SEQUENCE
 #define __UI_SEQUENCE
 
+#include "eeprom_manager.h"
 #include "ui.h"
 
 enum class SequenceUIState {
@@ -10,6 +11,7 @@ enum class SequenceUIState {
 
 class SequenceUI : public UI {
 public:
+    explicit SequenceUI(EEPROMManager* eeprom);
     void update_LED() override;
     void update_LCD() override;
     void pattern_btn_handler(uint8_t button) override;
@@ -23,8 +25,9 @@ public:
 
 private:
     bool check_led_state(int led_id);
-    SequenceUIState state;
+    SequenceUIState state = SequenceUIState::SELECT;
     int selected_sequence = 0;
+    EEPROMManager* eeprom_m;
 };
 
 #endif

@@ -4,6 +4,8 @@
 #include <cstring>
 #include <pico/stdlib.h>
 
+#include "eeprom_24C256.h"
+#include "eeprom_manager.h"
 #include "hardware/gpio.h"
 #include "hardware/i2c.h"
 #include "pico/binary_info/code.h"
@@ -30,8 +32,11 @@ static absolute_time_t last_func_int_time;
 static absolute_time_t last_clear_int_time;
 static absolute_time_t last_hold_int_time;
 
+static EEPROM_24C256 eeprom(i2c0, 0b01010000, true);
+static EEPROMManager eeprom_m(&eeprom);
+
 static DefaultUI dui;
-static SequenceUI sui;
+static SequenceUI sui(&eeprom_m);
 
 static UI* UIModes[] = { &dui, &sui };
 static uint8_t current_ui_mode = 0;
@@ -52,6 +57,7 @@ int main()
             ui->update_LCD();
             last_screen_update_time = get_absolute_time();
         }
+        eeprom_m.execute_ops();
     }
 }
 
@@ -62,8 +68,9 @@ void setup_midi_uart()
     gpio_set_function(MIDI_RX, GPIO_FUNC_UART);
 }
 
-void setup_i2c(){
-    i2c_init(i2c0, 100 * 1000);
+void setup_i2c()
+{
+    i2c_init(i2c0, 400 * 1000);
     gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
     gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
     gpio_pull_up(I2C_SDA);
@@ -228,7 +235,6 @@ void hold_button_handler()
 
     last_hold_int_time = get_absolute_time();
 }
-
 
 void encoder_handler()
 {

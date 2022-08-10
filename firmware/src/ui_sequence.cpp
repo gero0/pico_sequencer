@@ -1,13 +1,21 @@
+#include "eeprom_manager.h"
+#include "sequence.h"
 #include <cstdio>
 #include <main.h>
 #include <pins.h>
+#include <player.h>
 #include <ui_sequence.h>
 #include <utils.h>
+
+SequenceUI::SequenceUI(EEPROMManager* eeprom_m)
+    : eeprom_m(eeprom_m)
+{
+}
 
 void SequenceUI::update_LED()
 {
     std::array<bool, 16> states {};
-    if(state == SequenceUIState::CONFIRM){
+    if (state == SequenceUIState::CONFIRM) {
         states[selected_sequence] = true;
     }
     update_LEDs(states);
@@ -37,7 +45,7 @@ void SequenceUI::enc_handler(bool clockwise)
 void SequenceUI::start_btn_handler()
 {
     if (state == SequenceUIState::CONFIRM) {
-        //Write seq
+        eeprom_m->prepare_write(selected_sequence);
         state = SequenceUIState::SELECT;
     }
 }
@@ -49,7 +57,7 @@ void SequenceUI::setting_btn_handler()
 void SequenceUI::set_btn_handler()
 {
     if (state == SequenceUIState::CONFIRM) {
-        //Read seq
+        eeprom_m->prepare_read(selected_sequence);
         state = SequenceUIState::SELECT;
     }
 }
