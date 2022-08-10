@@ -1,3 +1,6 @@
+#ifndef __UI
+#define __UI
+
 #include <cstdint>
 
 class UI {
@@ -9,4 +12,9 @@ public:
     virtual void start_btn_handler() = 0;
     virtual void setting_btn_handler() = 0;
     virtual void set_btn_handler() = 0;
+    virtual void func_btn_handler() = 0;
+    virtual void clear_btn_handler() = 0;
+    virtual void hold_btn_handler() = 0;
 };
+
+#endif

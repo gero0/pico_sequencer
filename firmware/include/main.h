@@ -19,5 +19,8 @@ void start_stop_button_handler();
 void set_button_handler();
 void encoder_handler();
 void setting_button_handler();
+void func_button_handler();
+void clear_button_handler();
+void hold_button_handler();
 
 #endif

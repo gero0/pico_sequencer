@@ -1,8 +1,9 @@
+#include <display.h>
 #include <pins.h>
 #include <player.h>
-#include <display.h>
-#include <ui_default.h>
 #include <string_consts.h>
+#include <ui_default.h>
+#include <utils.h>
 
 void DefaultUI::pattern_btn_handler(uint8_t button)
 {
@@ -28,22 +29,6 @@ void DefaultUI::pattern_btn_handler(uint8_t button)
     } else {
         sequence.add_to_step(selected_note, button);
     }
-}
-
-template <typename T>
-T change_checked(T val, T lower_bound, T upper_bound, bool increment)
-{
-    if (increment) {
-        if (val < upper_bound) {
-            val++;
-        }
-    } else {
-        if (val > lower_bound) {
-            val--;
-        }
-    }
-
-    return val;
 }
 
 void DefaultUI::enc_handler(bool clockwise)
@@ -134,16 +119,11 @@ bool DefaultUI::check_led_state(int led_id)
 
 void DefaultUI::update_LED()
 {
-    for (int i = 0; i < step_count; i++) {
-        bool led_state = check_led_state(i);
-
-        gpio_put(SHIFT_DATA, led_state);
-        gpio_put(CLOCK, true);
-        gpio_put(CLOCK, false);
+    std::array<bool, 16> states {};
+    for (int i = 0; i < 16; i++) {
+        states[i] = check_led_state(i);
     }
-
-    gpio_put(LATCH, true);
-    gpio_put(LATCH, false);
+    update_LEDs(states);
 }
 
 void DefaultUI::update_LCD()
@@ -185,16 +165,14 @@ int DefaultUI::format_second_line(char buffer[], int buflen)
     return n;
 }
 
-void DefaultUI::write_to_display(char first_line[], int n1, char second_line[], int n2)
+void DefaultUI::func_btn_handler()
 {
-    LCD_clear();
-    sleep_ms(2);
-    LCD_position(1, 1);
-    sleep_ms(1);
-    LCD_write_text(first_line, std::min(LCD_ROW_LENGTH, n1));
-    sleep_ms(1);
-    LCD_position(2, 1);
-    sleep_ms(1);
-    LCD_write_text(second_line, std::min(LCD_ROW_LENGTH, n2));
-    sleep_ms(1);
+}
+
+void DefaultUI::clear_btn_handler()
+{
+}
+
+void DefaultUI::hold_btn_handler()
+{
 }
