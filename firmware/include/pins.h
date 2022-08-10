@@ -36,8 +36,8 @@
 #define SETTING_BTN 16
 
 //HD44780 via i2c
-#define DISPLAY_SDA 20
-#define DISPLAY_SCL 21
+#define I2C_SDA 20
+#define I2C_SCL 21
 
 //Encoder pins
 #define ENC_1 27

@@ -74,13 +74,6 @@ void LCD_write_init_nibble(uint8_t nibble)
 
 void LCD_init()
 {
-    i2c_init(i2c0, 100 * 1000);
-    gpio_set_function(DISPLAY_SDA, GPIO_FUNC_I2C);
-    gpio_set_function(DISPLAY_SCL, GPIO_FUNC_I2C);
-    gpio_pull_up(DISPLAY_SDA);
-    gpio_pull_up(DISPLAY_SCL);
-    bi_decl(bi_2pins_with_func(DISPLAY_SDA, DISPLAY_SCL, GPIO_FUNC_I2C));
-
     sleep_ms(50);
     LCD_write_init_nibble(0x20); // Wake-Up Sequence
     sleep_ms(5);

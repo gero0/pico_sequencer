@@ -5,6 +5,8 @@
 #include <pico/stdlib.h>
 
 #include "hardware/gpio.h"
+#include "hardware/i2c.h"
+#include "pico/binary_info/code.h"
 #include "tusb.h"
 #include "usb_descriptors.h"
 #include <bsp/board.h>
@@ -60,6 +62,15 @@ void setup_midi_uart()
     gpio_set_function(MIDI_RX, GPIO_FUNC_UART);
 }
 
+void setup_i2c(){
+    i2c_init(i2c0, 100 * 1000);
+    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
+    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
+    gpio_pull_up(I2C_SDA);
+    gpio_pull_up(I2C_SCL);
+    bi_decl(bi_2pins_with_func(I2C_SDA, I2C_SCL, GPIO_FUNC_I2C));
+}
+
 void initialize()
 {
     board_init();
@@ -67,6 +78,7 @@ void initialize()
     gpio_configure_pins();
     setup_midi_uart();
     gpio_set_interrupts(button_irq);
+    setup_i2c();
     LCD_init();
     timers_init();
     ui->update_LED();

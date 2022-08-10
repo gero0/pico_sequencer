@@ -9,6 +9,7 @@ const int MIDI_BAUDRATE = 31250;
 
 void initialize();
 void setup_midi_uart();
+void setup_i2c();
 void timers_init();
 void step_buttons_scan();
 void scan_inputs(std::array<bool, step_button_count>& button_states);
